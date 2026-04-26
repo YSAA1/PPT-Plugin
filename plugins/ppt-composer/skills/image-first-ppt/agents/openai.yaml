@@ -1,0 +1,4 @@
+interface:
+  display_name: "Image First PPT"
+  short_description: "Generate PPTX decks where every slide is one complete PNG."
+  default_prompt: "Use this reference file or brief to generate a full-slide PNG image-first PPT."

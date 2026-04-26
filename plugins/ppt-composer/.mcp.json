@@ -1,0 +1,30 @@
+{
+  "mcpServers": {
+    "mineru-open-mcp": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "mineru-open-mcp",
+        "python",
+        "./scripts/mineru-open-mcp-with-images.py",
+        "--transport",
+        "stdio",
+        "--output-dir",
+        "./dist/mineru-open-mcp"
+      ],
+      "env": {
+        "FASTMCP_CHECK_FOR_UPDATES": "off",
+        "FASTMCP_SHOW_SERVER_BANNER": "false"
+      },
+      "env_vars": [
+        "MINERU_API_TOKEN"
+      ]
+    },
+    "ppt-render-mcp": {
+      "command": "node",
+      "args": [
+        "./src/ppt-render-mcp.mjs"
+      ]
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "ppt-composer-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "ppt-composer": "./src/cli.mjs",
+    "ppt-render-mcp": "./src/ppt-render-mcp.mjs"
+  },
+  "scripts": {
+    "render": "node ./src/cli.mjs render",
+    "qa": "node ./src/cli.mjs qa",
+    "from-markdown": "node ./src/cli.mjs from-markdown",
+    "from-images": "node ./src/cli.mjs from-images",
+    "parse-paper": "node ./src/cli.mjs parse-paper",
+    "demo": "node ./src/cli.mjs render --spec ./examples/research-demo.spec.json --out ./dist/research-demo.pptx && node ./src/cli.mjs qa --pptx ./dist/research-demo.pptx --spec ./examples/research-demo.spec.json --out ./dist/research-demo.qa.json",
+    "test:enhancement": "node --test ./tests/enhancement-regression.test.mjs",
+    "smoke:markdown": "node ./src/cli.mjs from-markdown --input ./examples/outline.md --out ./dist/outline.spec.json --title \"Existing Content Deck\" && node ./src/cli.mjs render --spec ./dist/outline.spec.json --out ./dist/outline.pptx && node ./src/cli.mjs qa --pptx ./dist/outline.pptx --spec ./dist/outline.spec.json --out ./dist/outline.qa.json",
+    "smoke:images": "node ./src/cli.mjs from-images --out ./dist/image.spec.json --title \"Image First Demo\" --images ./examples/sample-visual.svg && node ./src/cli.mjs render --spec ./dist/image.spec.json --out ./dist/image.pptx && node ./src/cli.mjs qa --pptx ./dist/image.pptx --spec ./dist/image.spec.json --out ./dist/image.qa.json"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "pptxgenjs": "^4.0.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

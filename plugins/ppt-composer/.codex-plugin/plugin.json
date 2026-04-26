@@ -1,0 +1,46 @@
+{
+  "name": "ppt-composer",
+  "version": "0.1.0",
+  "description": "Image-first PPT generation with MCP-backed parsing and assembly tools: create one finished PNG per slide and assemble those PNGs into PowerPoint decks.",
+  "author": {
+    "name": "PPT Composer Maintainers",
+    "email": "noreply@example.com",
+    "url": "https://example.com/ppt-composer"
+  },
+  "homepage": "https://example.com/ppt-composer",
+  "repository": "https://example.com/ppt-composer.git",
+  "license": "MIT",
+  "keywords": [
+    "pptx",
+    "presentations",
+    "slides",
+    "image-first-ppt",
+    "png-slides",
+    "pptxgenjs"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "PPT Composer",
+    "shortDescription": "Generate image-first PPTX decks where every slide is one complete PNG.",
+    "longDescription": "PPT Composer exposes one image-first PPT skill while keeping MCP servers as the internal tool layer for PDF/reference parsing, visual planning, PNG manifest validation, PPTX assembly, and QA. The final deck contains exactly one finished full-slide PNG on each slide.",
+    "developerName": "PPT Composer Maintainers",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write",
+      "File Generation",
+      "Document Processing"
+    ],
+    "websiteURL": "https://example.com/ppt-composer",
+    "privacyPolicyURL": "https://example.com/privacy",
+    "termsOfServiceURL": "https://example.com/terms",
+    "defaultPrompt": [
+      "Use this reference file to generate a full-slide PNG image-first PPT.",
+      "Create an image-first PPT from this brief; every slide should be one complete PNG.",
+      "Generate a unified visual deck and assemble the PNG pages into a PPTX."
+    ],
+    "brandColor": "#2563EB",
+    "screenshots": []
+  }
+}

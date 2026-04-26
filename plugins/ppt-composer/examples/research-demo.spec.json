@@ -1,0 +1,106 @@
+{
+  "version": "0.1",
+  "deck": {
+    "title": "Editable Research Demo",
+    "audience": "lab meeting",
+    "language": "en-US",
+    "format": "16:9",
+    "editability": "native-first"
+  },
+  "theme": {
+    "template": "academic-clean",
+    "palette": ["#111827", "#2563EB", "#F8FAFC", "#E5E7EB"],
+    "fonts": {
+      "heading": "Aptos Display",
+      "body": "Aptos"
+    }
+  },
+  "assets": [],
+  "slides": [
+    {
+      "id": "s1",
+      "layout": "title",
+      "title": "Editable Research Demo",
+      "objects": [
+        {
+          "type": "text",
+          "role": "headline",
+          "position": { "x": 0.75, "y": 1.45, "w": 7.2, "h": 1.2 },
+          "text": "A native-first PPTX generated from slide-spec JSON"
+        },
+        {
+          "type": "shape",
+          "shape": "roundRect",
+          "position": { "x": 8.5, "y": 1.45, "w": 3.6, "h": 1.2 },
+          "fill": "#DBEAFE",
+          "line": { "color": "#2563EB", "width": 1.2 }
+        },
+        {
+          "type": "text",
+          "position": { "x": 8.75, "y": 1.72, "w": 3.1, "h": 0.6 },
+          "text": "editable text + shapes",
+          "align": "center",
+          "bold": true,
+          "fontSize": 16,
+          "color": "#1D4ED8"
+        }
+      ],
+      "notes": "Demo title slide."
+    },
+    {
+      "id": "s2",
+      "layout": "content",
+      "title": "Native objects keep the deck maintainable",
+      "objects": [
+        {
+          "type": "text",
+          "role": "bullets",
+          "position": { "x": 0.75, "y": 1.25, "w": 5.5, "h": 2.2 },
+          "text": "• Titles and bullets are native text boxes\n• Tables are native PowerPoint tables\n• Charts are native chart objects when data is available\n• Images are reserved for figures, art, and backgrounds"
+        },
+        {
+          "type": "table",
+          "position": { "x": 6.55, "y": 1.25, "w": 5.9, "h": 2.35 },
+          "rows": [
+            ["Object", "Editable?", "Use"],
+            ["Text", "Yes", "Claims and labels"],
+            ["Table", "Yes", "Structured results"],
+            ["Image", "Partial", "Figures and art"]
+          ]
+        },
+        {
+          "type": "formula",
+          "position": { "x": 0.75, "y": 4.25, "w": 11.7, "h": 0.7 },
+          "latex": "J(\\theta)=\\mathbb{E}_{\\tau \\sim \\pi_\\theta}[R(\\tau)]",
+          "fontSize": 20
+        }
+      ]
+    },
+    {
+      "id": "s3",
+      "layout": "chart",
+      "title": "Chart data remains editable",
+      "objects": [
+        {
+          "type": "chart",
+          "chartType": "bar",
+          "position": { "x": 0.85, "y": 1.25, "w": 7.1, "h": 4.6 },
+          "title": "Ablation score",
+          "labels": ["Baseline", "Parse", "Plan", "Render", "QA"],
+          "series": [
+            { "name": "Score", "values": [61, 70, 78, 86, 90] }
+          ],
+          "showValue": true
+        },
+        {
+          "type": "text",
+          "position": { "x": 8.3, "y": 1.55, "w": 3.7, "h": 2.8 },
+          "text": "The renderer creates a PowerPoint chart from data instead of screenshotting a chart image.",
+          "fontSize": 18,
+          "fill": "#ECFDF5",
+          "line": { "color": "#10B981", "width": 1 }
+        }
+      ]
+    }
+  ]
+}
