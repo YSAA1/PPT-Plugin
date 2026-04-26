@@ -24,6 +24,10 @@ PPT Composer is a Codex plugin that turns briefs and reference files into polish
 
 It is built for users who want a clean final deck, not a folder of prompts, placeholders, or half-finished slide backgrounds.
 
+<p align="center">
+  <img src="assets/ppt-composer-system-overview.png" alt="PPT Composer system overview">
+</p>
+
 ## Who It Is For
 
 Use PPT Composer when you want to:
@@ -113,6 +117,15 @@ Do not put raw image paths in `content_inputs`. Put files in `assets`, then refe
 | TXT | Plain-text briefs |
 | PNG/JPG/WebP | Figures, logos, and style references |
 | CSV/TSV | Tables and numeric evidence |
+
+## Examples
+
+The repository includes two generated PowerPoint examples:
+
+| Example | Description |
+| --- | --- |
+| [halo-academic-tsinghua.pptx](plugins/ppt-composer/examples/decks/halo-academic-tsinghua.pptx) | A Chinese academic research report deck with a Tsinghua-style visual direction. |
+| [codex-introduction.pptx](plugins/ppt-composer/examples/decks/codex-introduction.pptx) | A Codex introduction deck generated as an image-first PPTX. |
 
 ## Installation
 
@@ -207,11 +220,13 @@ PPT-Plugin/
 ├── README.md
 ├── README.zh-CN.md
 ├── assets/
-│   └── ppt-composer-logo.svg
+│   ├── ppt-composer-logo.svg
+│   └── ppt-composer-system-overview.png
 └── plugins/
     └── ppt-composer/
         ├── .codex-plugin/plugin.json
         ├── .mcp.json
+        ├── examples/decks/
         ├── package.json
         ├── scripts/
         ├── skills/image-first-ppt/

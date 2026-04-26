@@ -24,6 +24,10 @@ PPT Composer 是一个 Codex 插件，可以把需求描述、论文、PDF、报
 
 它面向想要“直接能展示的成品 PPT”的用户，而不是只产出 prompt、placeholder 或半成品背景图。
 
+<p align="center">
+  <img src="assets/ppt-composer-system-overview.png" alt="PPT Composer 系统流程图">
+</p>
+
 ## 适合谁
 
 适合这些场景：
@@ -113,6 +117,15 @@ ppt-composer:image-first-ppt
 | TXT | 纯文本 brief |
 | PNG/JPG/WebP | 参考图、logo、风格图 |
 | CSV/TSV | 表格和数值证据 |
+
+## 示例
+
+仓库中包含两份已生成的 PowerPoint 示例：
+
+| 示例 | 说明 |
+| --- | --- |
+| [halo-academic-tsinghua.pptx](plugins/ppt-composer/examples/decks/halo-academic-tsinghua.pptx) | 中文学术科研汇报示例，清华风格视觉方向。 |
+| [codex-introduction.pptx](plugins/ppt-composer/examples/decks/codex-introduction.pptx) | Codex 介绍示例，image-first PPTX。 |
 
 ## 安装
 
@@ -207,11 +220,13 @@ PPT-Plugin/
 ├── README.md
 ├── README.zh-CN.md
 ├── assets/
-│   └── ppt-composer-logo.svg
+│   ├── ppt-composer-logo.svg
+│   └── ppt-composer-system-overview.png
 └── plugins/
     └── ppt-composer/
         ├── .codex-plugin/plugin.json
         ├── .mcp.json
+        ├── examples/decks/
         ├── package.json
         ├── scripts/
         ├── skills/image-first-ppt/

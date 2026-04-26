@@ -7,6 +7,7 @@ plugins/ppt-composer/dist/
 FLASHSAC.pdf
 plan_next.md
 *.pptx
+!plugins/ppt-composer/examples/decks/*.pptx
 *.pdf
 *.qa.json
 __pycache__/
