@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">PPT Composer logo</title>
+  <desc id="desc">A protocol sheet and full-slide image mark for PPT Composer.</desc>
+  <defs>
+    <linearGradient id="frame" x1="64" y1="64" x2="448" y2="448" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4B2E83"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+    <linearGradient id="page" x1="144" y1="136" x2="368" y2="376" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#EEF2FF"/>
+    </linearGradient>
+  </defs>
+  <rect x="48" y="48" width="416" height="416" rx="88" fill="#F8FAFC"/>
+  <rect x="64" y="64" width="384" height="384" rx="72" fill="url(#frame)"/>
+  <rect x="112" y="112" width="288" height="216" rx="24" fill="url(#page)" stroke="#D8B4FE" stroke-width="8"/>
+  <rect x="140" y="148" width="132" height="18" rx="9" fill="#4B2E83"/>
+  <rect x="140" y="184" width="92" height="12" rx="6" fill="#60A5FA"/>
+  <rect x="140" y="212" width="156" height="12" rx="6" fill="#93C5FD"/>
+  <rect x="140" y="240" width="116" height="12" rx="6" fill="#C4B5FD"/>
+  <rect x="304" y="154" width="56" height="112" rx="14" fill="#DBEAFE" stroke="#2563EB" stroke-width="6"/>
+  <path d="M316 238l18-28 14 18 12-14v34h-44z" fill="#4B2E83"/>
+  <circle cx="334" cy="184" r="10" fill="#2563EB"/>
+  <path d="M152 368h208" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round"/>
+  <path d="M176 402h160" stroke="#BFDBFE" stroke-width="14" stroke-linecap="round"/>
+  <circle cx="384" cy="360" r="42" fill="#FFFFFF"/>
+  <path d="M368 360l12 12 24-28" fill="none" stroke="#2563EB" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

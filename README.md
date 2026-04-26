@@ -135,14 +135,37 @@ Requirements:
 - Codex with plugin support
 - Optional MinerU token for higher-quality document parsing
 
-Install dependencies:
+### Install from GitHub
 
 ```bash
-cd plugins/ppt-composer
-npm install
+codex plugin marketplace add YSAA1/PPT-Plugin
 ```
 
-Register `plugins/ppt-composer` in your Codex plugin directory or marketplace configuration.
+Then open Codex and install the plugin from the plugin browser:
+
+```text
+/plugins
+```
+
+Choose the `PPT Composer` marketplace entry and select `Install plugin`.
+
+### Install from a local clone
+
+```bash
+git clone https://github.com/YSAA1/PPT-Plugin.git
+cd PPT-Plugin
+codex plugin marketplace add .
+```
+
+Then run:
+
+```text
+/plugins
+```
+
+Open `PPT Composer` and select `Install plugin`.
+
+PPT Composer bundles its skill and MCP server configuration as a Codex plugin. On first MCP startup, the Node MCP wrapper installs runtime npm dependencies inside the installed plugin cache if they are missing.
 
 Plugin manifest:
 
@@ -219,6 +242,7 @@ npm run test:enhancement
 PPT-Plugin/
 ├── README.md
 ├── README.zh-CN.md
+├── .agents/plugins/marketplace.json
 ├── assets/
 │   ├── ppt-composer-logo.svg
 │   └── ppt-composer-system-overview.png
@@ -226,6 +250,7 @@ PPT-Plugin/
     └── ppt-composer/
         ├── .codex-plugin/plugin.json
         ├── .mcp.json
+        ├── assets/
         ├── examples/decks/
         ├── package.json
         ├── scripts/

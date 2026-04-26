@@ -4,11 +4,11 @@
   "description": "Image-first PPT generation with MCP-backed parsing and assembly tools: create one finished PNG per slide and assemble those PNGs into PowerPoint decks.",
   "author": {
     "name": "PPT Composer Maintainers",
-    "email": "noreply@example.com",
-    "url": "https://example.com/ppt-composer"
+    "email": "noreply@users.noreply.github.com",
+    "url": "https://github.com/YSAA1/PPT-Plugin"
   },
-  "homepage": "https://example.com/ppt-composer",
-  "repository": "https://example.com/ppt-composer.git",
+  "homepage": "https://github.com/YSAA1/PPT-Plugin",
+  "repository": "https://github.com/YSAA1/PPT-Plugin.git",
   "license": "MIT",
   "keywords": [
     "pptx",
@@ -32,15 +32,19 @@
       "File Generation",
       "Document Processing"
     ],
-    "websiteURL": "https://example.com/ppt-composer",
-    "privacyPolicyURL": "https://example.com/privacy",
-    "termsOfServiceURL": "https://example.com/terms",
+    "websiteURL": "https://github.com/YSAA1/PPT-Plugin",
+    "privacyPolicyURL": "https://github.com/YSAA1/PPT-Plugin",
+    "termsOfServiceURL": "https://github.com/YSAA1/PPT-Plugin",
     "defaultPrompt": [
       "Use this reference file to generate a full-slide PNG image-first PPT.",
       "Create an image-first PPT from this brief; every slide should be one complete PNG.",
       "Generate a unified visual deck and assemble the PNG pages into a PPTX."
     ],
     "brandColor": "#2563EB",
-    "screenshots": []
+    "composerIcon": "./assets/ppt-composer-logo.svg",
+    "logo": "./assets/ppt-composer-logo.svg",
+    "screenshots": [
+      "./assets/ppt-composer-system-overview.png"
+    ]
   }
 }

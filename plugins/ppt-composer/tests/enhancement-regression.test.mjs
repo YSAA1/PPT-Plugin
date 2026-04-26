@@ -164,7 +164,10 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   const mcpConfig = JSON.parse(await readFile(path.join(pluginRoot, '.mcp.json'), 'utf8'));
   assert.ok(mcpConfig.mcpServers['mineru-open-mcp']);
   assert.ok(mcpConfig.mcpServers['ppt-render-mcp']);
-  assert.ok(mcpConfig.mcpServers['mineru-open-mcp'].args.includes('./scripts/mineru-open-mcp-with-images.py'));
+  assert.ok(mcpConfig.mcpServers['mineru-open-mcp'].args.includes('./scripts/run-mineru-open-mcp.mjs'));
+  assert.ok(mcpConfig.mcpServers['ppt-render-mcp'].args.includes('./scripts/run-ppt-render-mcp.mjs'));
+  assert.equal(mcpConfig.mcpServers['mineru-open-mcp'].cwd, '.');
+  assert.equal(mcpConfig.mcpServers['ppt-render-mcp'].cwd, '.');
 
   const mineruWrapper = await readFile(
     path.join(pluginRoot, 'scripts/mineru-open-mcp-with-images.py'),
@@ -172,6 +175,19 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   );
   assert.match(mineruWrapper, /image_paths/);
   assert.match(mineruWrapper, /zip_url/);
+
+  const nodeMineruWrapper = await readFile(
+    path.join(pluginRoot, 'scripts/run-mineru-open-mcp.mjs'),
+    'utf8',
+  );
+  assert.match(nodeMineruWrapper, /mineru-open-mcp-with-images\.py/);
+
+  const nodeRenderWrapper = await readFile(
+    path.join(pluginRoot, 'scripts/run-ppt-render-mcp.mjs'),
+    'utf8',
+  );
+  assert.match(nodeRenderWrapper, /npm/);
+  assert.match(nodeRenderWrapper, /ppt-render-mcp\.mjs/);
 });
 
 test('assemble-image-ppt builds one full-slide PNG per slide', async () => {

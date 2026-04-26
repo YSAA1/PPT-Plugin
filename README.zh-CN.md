@@ -135,14 +135,37 @@ ppt-composer:image-first-ppt
 - 支持插件的 Codex
 - 可选：MinerU token，用于更高质量的文档解析
 
-安装依赖：
+### 从 GitHub 安装
 
 ```bash
-cd plugins/ppt-composer
-npm install
+codex plugin marketplace add YSAA1/PPT-Plugin
 ```
 
-把 `plugins/ppt-composer` 注册到你的 Codex 插件目录或 marketplace 配置里。
+然后打开 Codex 插件列表：
+
+```text
+/plugins
+```
+
+选择 `PPT Composer`，点击 `Install plugin`。
+
+### 从本地 clone 安装
+
+```bash
+git clone https://github.com/YSAA1/PPT-Plugin.git
+cd PPT-Plugin
+codex plugin marketplace add .
+```
+
+然后运行：
+
+```text
+/plugins
+```
+
+打开 `PPT Composer`，点击 `Install plugin`。
+
+PPT Composer 会把 skill 和 MCP server 配置一起打包成 Codex 插件。第一次启动 MCP 时，如果安装后的插件 cache 里缺少 Node 运行依赖，内置启动器会自动在该 cache 目录内安装依赖。
 
 插件入口文件：
 
@@ -219,6 +242,7 @@ npm run test:enhancement
 PPT-Plugin/
 ├── README.md
 ├── README.zh-CN.md
+├── .agents/plugins/marketplace.json
 ├── assets/
 │   ├── ppt-composer-logo.svg
 │   └── ppt-composer-system-overview.png
@@ -226,6 +250,7 @@ PPT-Plugin/
     └── ppt-composer/
         ├── .codex-plugin/plugin.json
         ├── .mcp.json
+        ├── assets/
         ├── examples/decks/
         ├── package.json
         ├── scripts/

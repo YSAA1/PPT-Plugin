@@ -2,7 +2,9 @@ node_modules/
 dist/
 plugins/ppt-composer/dist/
 .omx/
-.agents/
+.agents/*
+!.agents/plugins/
+!.agents/plugins/marketplace.json
 .codex
 FLASHSAC.pdf
 plan_next.md

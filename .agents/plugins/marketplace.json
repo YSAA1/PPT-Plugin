@@ -1,0 +1,20 @@
+{
+  "name": "ppt-composer-local",
+  "interface": {
+    "displayName": "Local PPT Composer"
+  },
+  "plugins": [
+    {
+      "name": "ppt-composer",
+      "source": {
+        "source": "local",
+        "path": "./plugins/ppt-composer"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
