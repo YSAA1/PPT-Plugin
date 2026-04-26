@@ -1,0 +1,33 @@
+name: Test
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+jobs:
+  ppt-composer:
+    name: PPT Composer
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: plugins/ppt-composer
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: plugins/ppt-composer/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run enhancement regression tests
+        run: npm run test:enhancement
