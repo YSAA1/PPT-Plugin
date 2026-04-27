@@ -221,7 +221,33 @@ Then run:
 
 Open `PPT Composer` and select `Install plugin`.
 
-PPT Composer bundles its skill and MCP server configuration as a Codex plugin. On first MCP startup, the Node MCP wrapper installs runtime npm dependencies inside the installed plugin cache if they are missing.
+PPT Composer bundles its skill and MCP server configuration as a Codex plugin. On first MCP startup, the Node MCP wrapper automatically installs missing runtime npm dependencies inside the installed plugin cache. Install logs are written to stderr so they do not pollute the MCP stdio protocol channel.
+
+### Dependency Prewarm
+
+Prewarm means preparing the plugin's local runtime dependencies after install or update, before Codex starts the MCP servers. It is optional for most users, because the Node wrapper auto-installs missing npm dependencies once. It is useful when a slow network makes first MCP startup time out, or when you want to warm MinerU's `uvx` environment before using document parsing.
+
+If you are developing from a clone, or if first MCP startup reports missing dependencies, run:
+
+```bash
+cd plugins/ppt-composer
+npm run prewarm
+```
+
+If you installed the plugin through Codex and the MCP error prints an installed plugin path, run the same command in that printed plugin root:
+
+```bash
+cd <installed-plugin-root>
+npm run prewarm
+```
+
+If you will use MinerU parsing, also warm the `uvx` MinerU environment:
+
+```bash
+npm run prewarm:mineru
+```
+
+After prewarming, restart Codex so it starts MCP servers from the warm dependency cache.
 
 The MCP startup wrappers are cross-platform Node scripts. On Windows they call `npm.cmd` / `uvx.cmd` and the plugin parses DOCX/PPTX with JSZip instead of requiring a system `unzip` command.
 

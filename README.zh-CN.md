@@ -221,7 +221,33 @@ codex plugin marketplace add .
 
 打开 `PPT Composer`，点击 `Install plugin`。
 
-PPT Composer 会把 skill 和 MCP server 配置一起打包成 Codex 插件。第一次启动 MCP 时，如果安装后的插件 cache 里缺少 Node 运行依赖，内置启动器会自动在该 cache 目录内安装依赖。
+PPT Composer 会把 skill 和 MCP server 配置一起打包成 Codex 插件。第一次启动 MCP 时，Node MCP 启动器会在已安装插件 cache 内自动安装缺失的运行依赖。安装日志会写到 stderr，不会污染 MCP 的 stdio 协议通道。
+
+### 依赖预热
+
+“预热依赖”的意思是：插件安装或更新后，先把本地运行依赖准备好，再让 Codex 启动 MCP server。对大多数用户这是可选的，因为 Node 依赖缺失时会自动安装一次；它主要用于网络很慢导致首次 MCP 启动超时，或者你想提前准备 MinerU 的 `uvx` 环境。
+
+如果你是在 clone 仓库里开发，或者首次 MCP 启动提示依赖缺失，运行：
+
+```bash
+cd plugins/ppt-composer
+npm run prewarm
+```
+
+如果你是通过 Codex 安装插件，并且 MCP 报错里打印了已安装插件路径，就进入那个插件根目录运行同一条命令：
+
+```bash
+cd <installed-plugin-root>
+npm run prewarm
+```
+
+如果需要用 MinerU 解析 PDF / Office / 图片参考资料，再运行：
+
+```bash
+npm run prewarm:mineru
+```
+
+预热后重启 Codex，让 MCP server 从已经准备好的依赖缓存启动。
 
 MCP 启动器是跨平台 Node 脚本。在 Windows 上会调用 `npm.cmd` / `uvx.cmd`，并且插件使用 JSZip 解析 DOCX/PPTX，不依赖系统自带 `unzip` 命令。
 

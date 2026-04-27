@@ -256,6 +256,11 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.equal(mcpConfig.mcpServers['mineru-open-mcp'].cwd, '.');
   assert.equal(mcpConfig.mcpServers['ppt-render-mcp'].cwd, '.');
 
+  const packageJson = JSON.parse(await readFile(path.join(pluginRoot, 'package.json'), 'utf8'));
+  assert.equal(packageJson.scripts.prewarm, 'node ./scripts/prewarm-deps.mjs');
+  assert.equal(packageJson.scripts['prewarm:mineru'], 'node ./scripts/prewarm-deps.mjs --include-mineru');
+  assert.equal(packageJson.dependencies.jszip, '^3.10.1');
+
   const mineruWrapper = await readFile(
     path.join(pluginRoot, 'scripts/mineru-open-mcp-with-images.py'),
     'utf8',
@@ -268,15 +273,28 @@ test('plugin exposes only the image-first-ppt skill', async () => {
     'utf8',
   );
   assert.match(nodeMineruWrapper, /mineru-open-mcp-with-images\.py/);
+  assert.match(nodeMineruWrapper, /prewarm:mineru/);
   assert.match(nodeMineruWrapper, /buildPluginEnv/);
 
   const nodeRenderWrapper = await readFile(
     path.join(pluginRoot, 'scripts/run-ppt-render-mcp.mjs'),
     'utf8',
   );
-  assert.match(nodeRenderWrapper, /npm/);
   assert.match(nodeRenderWrapper, /ppt-render-mcp\.mjs/);
+  assert.match(nodeRenderWrapper, /npm run prewarm/);
+  assert.match(nodeRenderWrapper, /npmCommand/);
+  assert.match(nodeRenderWrapper, /spawnSync/);
+  assert.match(nodeRenderWrapper, /PPT_COMPOSER_DISABLE_AUTO_INSTALL/);
+  assert.match(nodeRenderWrapper, /process\.stderr\.write/);
   assert.match(nodeRenderWrapper, /buildPluginEnv/);
+
+  const prewarmScript = await readFile(
+    path.join(pluginRoot, 'scripts/prewarm-deps.mjs'),
+    'utf8',
+  );
+  assert.match(prewarmScript, /--include-mineru/);
+  assert.match(prewarmScript, /mineru-open-mcp/);
+  assert.match(prewarmScript, /npmCommand/);
 });
 
 test('MCP wrappers load .env files without overriding shell environment', async () => {
