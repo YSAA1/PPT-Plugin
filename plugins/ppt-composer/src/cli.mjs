@@ -15,7 +15,7 @@ import { referenceIntake } from "./reference-intake.mjs";
 import { validateDeckProtocolAsync } from "./deck-protocol.mjs";
 import { patchProtocolFile } from "./protocol-patch.mjs";
 import { createAssetIndex } from "./asset-index.mjs";
-import { createJobsFile, backfillJobsFile, jobsToManifestFile, summarizeJobs } from "./imagegen-jobs.mjs";
+import { createJobsFile, backfillJobsFile, reviewJobsFile, reviseJobsFile, jobsToManifestFile, summarizeJobs } from "./imagegen-jobs.mjs";
 import { runVisualQaFile } from "./visual-qa.mjs";
 import { pptxReferenceIntake } from "./pptx-reference-intake.mjs";
 import { readJson, resolvePath, writeJson } from "./lib.mjs";
@@ -37,8 +37,10 @@ Usage:
   ppt-composer asset-index-create --out-dir <work-dir> --sources <file-or-url> ... [--out <asset-index.json>]
   ppt-composer imagegen-jobs-create --protocol <deck-protocol.json> --out <imagegen-jobs.json>
   ppt-composer imagegen-jobs-status --jobs <imagegen-jobs.json>
-  ppt-composer imagegen-jobs-backfill --jobs <imagegen-jobs.json> --page <n> --png <slide.png> [--status generated|accepted] [--note <note>]
-  ppt-composer imagegen-jobs-to-manifest --jobs <imagegen-jobs.json> --out <png-manifest.json>
+  ppt-composer imagegen-jobs-backfill --jobs <imagegen-jobs.json> --page <n> --png <slide.png> [--status generated|needs_review|accepted] [--note <note>] [--execution-summary <json>]
+  ppt-composer imagegen-jobs-review --jobs <imagegen-jobs.json> --page <n> [--verdict pass|warn|fail] [--consistency pass|warn|fail] [--protocol-alignment pass|warn|fail] [--reference-fidelity pass|warn|fail] [--text-legibility pass|warn|fail] [--artifact-quality pass|warn|fail] [--note <note>] [--revision-suggestion <note>]
+  ppt-composer imagegen-jobs-revise --jobs <imagegen-jobs.json> --page <n> [--note <note>] [--revision-suggestion <note>]
+  ppt-composer imagegen-jobs-to-manifest --jobs <imagegen-jobs.json> --out <png-manifest.json> [--require-accepted]
   ppt-composer visual-qa --protocol <deck-protocol.json> --jobs <imagegen-jobs.json> --out <visual-qa.json> [--manual-override-note <note>]
   ppt-composer pptx-reference-intake --input <reference.pptx> --out-dir <work-dir> [--index-out <asset-index.json>] [--protocol <deck-protocol.json>]
   ppt-composer asset-plan --spec <slide-spec.json> --out <asset-plan.json> [--mode supporting|full-slide] [--size 1536x864] [--quality low]  # supporting is deprecated
@@ -304,15 +306,53 @@ async function main() {
       pngPath: resolvePath(requireArg(args, "png")),
       status: args.status || "generated",
       note: args.note || "",
+      executionSummary: args["execution-summary"] ? parseJsonArg(args["execution-summary"], "execution-summary") : null,
     });
     process.stdout.write(`${JSON.stringify({ jobs: jobsPath, summary: result.summary }, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "imagegen-jobs-review") {
+    const jobsPath = resolvePath(requireArg(args, "jobs"));
+    const result = await reviewJobsFile({
+      jobsPath,
+      page: requireArg(args, "page"),
+      verdict: args.verdict || null,
+      note: args.note || "",
+      reviewer: args.reviewer || "",
+      revisionSuggestion: args["revision-suggestion"] || "",
+      consistency: args.consistency || null,
+      protocolAlignment: args["protocol-alignment"] || null,
+      basicImageQuality: args["basic-image-quality"] || null,
+      referenceFidelity: args["reference-fidelity"] || null,
+      textLegibility: args["text-legibility"] || null,
+      artifactQuality: args["artifact-quality"] || null,
+    });
+    process.stdout.write(`${JSON.stringify({ jobs: jobsPath, page: result.page.page, status: result.page.status, review: result.page.review, summary: result.summary }, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "imagegen-jobs-revise") {
+    const jobsPath = resolvePath(requireArg(args, "jobs"));
+    const result = await reviseJobsFile({
+      jobsPath,
+      page: requireArg(args, "page"),
+      note: args.note || "",
+      reviewer: args.reviewer || "",
+      revisionSuggestion: args["revision-suggestion"] || "",
+    });
+    process.stdout.write(`${JSON.stringify({ jobs: jobsPath, page: result.page.page, status: result.page.status, revision: result.page.revision, summary: result.summary }, null, 2)}\n`);
     return;
   }
 
   if (command === "imagegen-jobs-to-manifest") {
     const jobsPath = resolvePath(requireArg(args, "jobs"));
     const outPath = resolvePath(requireArg(args, "out"));
-    const result = await jobsToManifestFile({ jobsPath, outPath });
+    const result = await jobsToManifestFile({
+      jobsPath,
+      outPath,
+      requireAccepted: args["require-accepted"] ? true : null,
+    });
     process.stdout.write(`${JSON.stringify({ manifest: outPath, items: result.manifest.items.length, summary: result.summary }, null, 2)}\n`);
     return;
   }

@@ -12,25 +12,20 @@ modes:
 - Precision mode: requires `MINERU_API_TOKEN`, supports higher limits and richer
   parsing.
 
-The publishable plugin config uses `uvx` and forwards `MINERU_API_TOKEN` from
-the user's environment. It launches the plugin wrapper
+The publishable plugin config uses the Node launcher
+`scripts/run-mineru-open-mcp.mjs`, which calls `uvx` and forwards
+`MINERU_API_TOKEN` from the user's environment. The launcher then runs
 `scripts/mineru-open-mcp-with-images.py`, which keeps the official
 `mineru-open-mcp` server but patches the MCP response boundary so extracted
 images are saved locally and returned as `image_paths`.
 
 ```json
 {
-  "command": "uvx",
+  "command": "node",
   "args": [
-    "--from",
-    "mineru-open-mcp",
-    "python",
-    "./scripts/mineru-open-mcp-with-images.py",
-    "--transport",
-    "stdio",
-    "--output-dir",
-    "./dist/mineru-open-mcp"
+    "./scripts/run-mineru-open-mcp.mjs"
   ],
+  "cwd": ".",
   "env": {
     "FASTMCP_CHECK_FOR_UPDATES": "off",
     "FASTMCP_SHOW_SERVER_BANNER": "false"
@@ -60,6 +55,14 @@ Recommended Precision API defaults for PPT reference parsing:
 - `extra_formats: ["html"]` only when HTML structure is useful downstream.
 - Use `page_ranges` when the user only needs part of a document.
 
+Cold `uvx` startup can download or create an environment before the MCP server
+is ready. After plugin install or update, run this from the installed plugin
+root when MinerU parsing is needed:
+
+```bash
+npm run prewarm:mineru
+```
+
 ## `ppt-render-mcp`
 
 Local MCP server implemented by this plugin:
@@ -80,6 +83,15 @@ Core tools:
 
 Helper tools remain internal. The public workflow is still the
 `image-first-ppt` skill.
+
+Node dependencies are automatically installed once if the installed plugin cache
+is missing runtime dependencies. The wrapper pipes `npm install` output to
+stderr so it does not corrupt the MCP stdio channel. For slow networks or
+explicit setup, prewarm them before starting Codex:
+
+```bash
+npm run prewarm
+```
 
 ## Publishing Notes
 

@@ -7,6 +7,17 @@ description: "Generate image-first PowerPoint decks. Hard workflow: intake brief
 
 Create a low-editability PPTX where every slide is exactly one finished full-slide PNG. Do not create editable/native/hybrid decks, prompt-only deliverables, SVG placeholders, HTML screenshots, or a background/base draft for later PPT text overlay.
 
+## Progressive Loading
+
+Load only the reference file needed for the current stage:
+
+- Protocol drafting, fidelity modes, speaker notes, patch rules, or existing-PPT preservation boundaries: read [references/protocol.md](references/protocol.md).
+- Image generation, subagent splitting, `style_lock`, spawn rules, and worker prompts: read [references/image-generation-workers.md](references/image-generation-workers.md).
+- Job states, PNG manifest, deterministic QA, visual review rubric, and review prompt: read [references/manifest-visual-qa.md](references/manifest-visual-qa.md).
+- MCP/CLI tool names and terminal failure conditions: read [references/tools-and-failures.md](references/tools-and-failures.md).
+
+Do not rely on this entry file as the only source when implementing a stage covered by a reference.
+
 ## Outcome Gate
 
 MUST satisfy all rules:
@@ -24,316 +35,56 @@ MUST satisfy all rules:
 
 Execute in this exact order. Do not skip forward.
 
-1. Clarify missing requirements.
-2. Create `deck-protocol.json`.
+1. Requirement Gate: before creating `deck-protocol.json`, all required fields below MUST be known or explicitly marked "user does not care"; if any required field is missing, ask only for the missing fields and STOP.
+2. Create `deck-protocol.json`. Read [references/protocol.md](references/protocol.md).
 3. Validate `deck-protocol.json`.
-4. Patch revisions only through protocol patch tools when possible.
-5. Present the protocol summary and wait for explicit confirmation. This is the Protocol Confirmation Gate.
-6. After confirmation, generate final full-slide PNGs directly with Codex image generation. Treat confirmation as authorization to use bounded image-generation subagents for the confirmed pages.
-   - For multi-page decks, MUST dispatch bounded image-generation subagents before generating directly in the leader.
-   - The leader MUST NOT silently do all confirmed pages alone unless subagent spawning is unavailable or has already failed.
+4. Patch revisions only through protocol patch tools. If patch tools are unavailable, record the reason, edit the protocol directly, and immediately rerun `validate-deck-protocol`.
+5. Present the protocol summary and wait for explicit protocol confirmation. This is the Protocol Confirmation Gate.
+6. After confirmation, generate final full-slide PNGs directly with Codex image generation. Read [references/image-generation-workers.md](references/image-generation-workers.md).
 7. Track page status in `imagegen-jobs.json`.
-8. Run `visual-qa`.
-9. Create `png-manifest.json` only from complete accepted/generated jobs.
-10. Assemble with `assemble-image-ppt` / MCP `assemble_image_ppt`.
-11. Run final `qa_pptx`.
+8. Run deterministic `visual-qa` to check whether the generated PNG files are structurally assembleable. Read [references/manifest-visual-qa.md](references/manifest-visual-qa.md).
+9. Run the internal visual review loop only when the user explicitly asks for visual QA, strict review, consistency checking, or protocol-execution checking.
+10. Create `png-manifest.json` only from complete accepted/generated jobs. If visual review is enabled, every page MUST be `accepted`.
+11. Assemble with `assemble-image-ppt` / MCP `assemble_image_ppt`.
+12. Run final `qa_pptx`.
 
 Hard stop conditions:
 
 - If protocol is not confirmed, STOP before image generation.
 - If any page lacks a real PNG, STOP before manifest creation.
-- If `visual-qa` status is `fail`, STOP before assembly unless a manual override note exists.
+- If `visual-qa` status is `fail`, STOP before assembly. Manual override is allowed only for overrideable review findings, never for missing/non-PNG/placeholder/tiny/strict_embed fidelity failures.
 - If final PPTX QA does not show one picture per slide and zero text overlays, STOP and report failure.
 
-## Clarification Fields
+## Requirement Gate
 
 Collect these before drafting a protocol. Ask only for missing items. Do not infer hard constraints such as logo, required wording, page count, or strict evidence from unrelated files.
 
-- language
-- deck type, such as academic report, product pitch, class presentation, business proposal, paper summary, or teaching deck
-- target audience
-- page-count range or exact page count
-- visual style
-- aspect ratio, defaulting to 16:9 only if the user does not care
-- output directory and final PPTX filename
-- reference file paths or uploaded files
-- required wording, logo, color, data, citation, or exclusion constraints
+- Required: language.
+- Required: deck type, such as academic report, product pitch, class presentation, business proposal, paper summary, or teaching deck.
+- Required: target audience.
+- Required: page-count range or exact page count.
+- Required: visual style.
+- Required: aspect ratio; use 16:9 only when the user says they do not care.
+- Required: output directory and final PPTX filename.
+- Required: reference file paths/uploaded files OR an explicit "no references, generate from brief only" confirmation.
+- Required: required wording, logo, color, data, citation, and exclusion constraints OR explicit "none".
+
+Go condition: every required item is known or explicitly waived.
+Stop condition: any required item is unknown. Do not create `deck-protocol.json`.
+Protocol confirmation condition: only an explicit approval such as "确认协议", "按此 protocol 生成", "开始生图", or equivalent clear approval authorizes image generation. Ambiguous replies such as "继续", "ok", or "不错" do not authorize image generation unless they clearly refer to the protocol summary.
 
 If no uploaded file or explicit reference path exists, MUST NOT scan the current project. Continue from the user brief.
 
-## Protocol
+## Stage Notes
 
-`deck-protocol.json` is the source of truth before generation. It MUST keep:
-
-- deck metadata and style;
-- localized reference assets by id;
-- one page record per slide;
-- `content_inputs`, `reference_asset_ids`, `fidelity`, `final_image_prompt`, `negative_prompt`, `output_png`, and optional `speaker_notes`.
-
-Use only these fidelity modes:
-
-- `free`: approved brief/style only.
-- `light_redraw`: preserve facts, trends, key numbers, labels, and meaning while restyling.
-- `strict_embed`: preserve referenced figures, tables, headers, values, logos, and captions.
-
-Use `asset-index-create` or `reference-intake` to keep `reference-assets/asset-index.json` synchronized. Page content MUST reference stable asset ids, not raw paths.
-
-Protocol skeleton:
-
-```json
-{
-  "kind": "ppt-composer-deck-protocol",
-  "version": "0.1",
-  "mode": "reference_grounded_mode",
-  "deck": {
-    "title": "",
-    "language": "zh",
-    "audience": "",
-    "page_count": 8,
-    "aspect_ratio": "16:9"
-  },
-  "style": {
-    "description": "",
-    "template_image_ids": [],
-    "logo_ids": [],
-    "palette": [],
-    "typography": ""
-  },
-  "assets": [],
-  "pages": []
-}
-```
-
-Each page MUST include exactly these required fields:
-
-- `page`, `title`, `claim`
-- `content_inputs`: `{ "text": [], "tables": [], "images": [] }`
-- `reference_asset_ids`
-- `fidelity`
-- `final_image_prompt`
-- `negative_prompt`
-- `output_png`
-- optional `speaker_notes`: speaker/presenter notes written to PPT notes, not visible slide text
-- `free_generation: true` only when a reference-grounded page intentionally has no evidence binding
-
-Speaker notes rules:
-
-- Use `speaker_notes` as the canonical protocol key.
-- Accept legacy aliases `notes`, `remarks`, `presenter_notes`, and `备注` when user-authored protocols already contain them.
-- Speaker notes MUST NOT be rendered inside the PNG unless the user explicitly says they are visible slide text.
-- Assembly MUST carry speaker notes from protocol -> `imagegen-jobs.json` -> `png-manifest.json` -> PPT speaker notes.
-
-Protocol patch rules:
-
-- MUST use `protocol-add-asset` for new assets when a protocol file already exists.
-- MUST use `protocol-bind-asset` to bind references to pages.
-- MUST use `protocol-update-page` to change a page claim, prompt, negative prompt, output path, or content inputs.
-- MUST use `protocol-set-fidelity` to change fidelity.
-- MUST reject duplicate asset ids, unknown page numbers, unknown asset ids, and illegal fidelity values.
-- MUST pretty-print JSON after patching.
-- MUST preserve `version: "0.1"` and additive compatibility.
-
-Before asking for confirmation, present the title, page count, aspect ratio, global visual style, page-by-page claims, evidence bindings, fidelity modes, prompts, negative prompts, and output filenames. Then stop until the user explicitly confirms.
-
-## Image Generation
-
-Primary path: Codex built-in image generation via the installed `imagegen` skill, `$imagegen`, or `image_gen`.
-
-- MUST NOT check `OPENAI_API_KEY` before trying Codex built-in image generation.
-- Missing `OPENAI_API_KEY` MUST NOT be treated as evidence that built-in `image_gen` is unavailable.
-- A missing `OPENAI_API_KEY` does not mean built-in `image_gen` is unavailable.
+- Protocol content truth lives in `deck-protocol.json`, not in `imagegen-jobs.json`.
+- Existing-PPT hard-preservation requests are a different product lane; read [references/protocol.md](references/protocol.md) before responding.
+- Codex built-in image generation is the primary image path; missing `OPENAI_API_KEY` is not evidence that built-in `image_gen` is unavailable.
 - `generate-assets --provider codex` is only a prompt-sheet handoff, not image generation.
-- `generate-assets --provider openai` is an explicit API fallback.
-- If imagegen workers fail or return prompt-only output, retry or generate directly. MUST NOT assemble placeholders.
-
-Leader must split work as follows:
-
-- 1 page: the leader may generate directly.
-- 2-6 pages: MUST dispatch one subagent per page.
-- 7+ pages: MUST dispatch 3-6 concurrent subagents, each assigned a consecutive page range.
-- Each page still requires an independent PNG file.
-
-Subagent runtime and model rules:
-
-- Image generation is slow. Default budget is 2 minutes per image unless the user gives a different budget.
-- Estimate each subagent's runtime as `assigned_page_count * per_image_budget`.
-- Add a practical buffer when waiting for image workers. If the expected image time is 2 minutes, wait at least 3 minutes for a one-page worker; for multi-page workers, wait at least `assigned_page_count * 2 minutes + 1 minute`.
-- If a page range would exceed the maximum wait time, split the range into smaller subagent tasks.
-- Prefer more parallel one-page workers over long sequential multi-page workers when the deck has 2-6 pages.
-- For 7+ pages, keep at most 6 concurrent subagents, but size each consecutive range so the range fits inside the wait budget.
-- Image workers MUST use `reasoning_effort: "low"` unless the user explicitly asks for deeper reasoning. The worker is executing a fixed image prompt, not planning the deck.
-- The leader may use stronger reasoning for planning, but worker prompts MUST stay narrow and execution-focused.
-
-Shared context rules:
-
-- Before spawning workers, the leader MUST create one shared deck generation context from the confirmed protocol: deck title, audience, aspect ratio, global style, palette, typography, logo/template asset ids, page list, global negative rules, QA acceptance rules, and asset index.
-- Every worker MUST receive the exact same shared deck generation context plus only its assigned page protocol slice and relevant reference asset paths.
-- MUST NOT rely on inherited chat history as the only consistency mechanism.
-- Every subagent task MUST be a hard-bounded image-generation task. Subagent output is PNG.
-
-Spawn call rules:
-
-- MUST NOT call `spawn_agent` with `fork_context: true` when also setting `agent_type` / role.
-- Preferred consistency-first shape is: omit `agent_type`, set `fork_context: true`, set `reasoning_effort: "low"`, and still include the shared deck generation context in the worker prompt.
-- If role-less forked spawn fails, or if a role is required by the runtime, MUST omit `fork_context`; write the shared deck generation context and complete task context into `message` or `items`.
-- Context-packet fallback shape is: set `fork_context: false` or omit it, set `reasoning_effort: "low"`, and put the shared deck generation context plus assigned page context in the worker prompt.
-- If subagent spawning is unavailable, blocked, or fails, the leader MAY fall back to direct generation, but MUST record the reason in `imagegen-jobs.json` notes or the final handoff. Silent fallback is FORBIDDEN.
-- The leader MUST wait for subagent results or failure status before creating `png-manifest.json`.
-
-Spawn call guardrail:
-
-```text
-Allowed:
-spawn_agent({
-  reasoning_effort: "low",
-  fork_context: true,
-  message: "<worker prompt with shared deck generation context, assigned page protocol slice, and reference paths>"
-})
-
-Also allowed:
-spawn_agent({
-  reasoning_effort: "low",
-  fork_context: false,
-  message: "<worker prompt with shared deck generation context, assigned page protocol slice, and reference paths>"
-})
-
-Also allowed when a role is unavoidable:
-spawn_agent({
-  agent_type: "<role>",
-  reasoning_effort: "low",
-  message: "<worker prompt with shared deck generation context, assigned page protocol slice, and reference paths>"
-})
-
-Forbidden:
-spawn_agent({
-  agent_type: "<any role>",
-  fork_context: true,
-  ...
-})
-```
-
-Worker prompt template:
-
-```text
-You are an image-generation worker for image-first PPT.
-
-Scope:
-- Generate only the assigned page(s).
-- Do not redesign the deck.
-- Do not change the outline.
-- Do not edit prompts for other pages.
-- Do not create PPTX, SVG, HTML, markdown, placeholder art, or prompt-only artifacts.
-- Follow the shared deck generation context exactly so pages are visually consistent with other workers.
-- Treat `speaker_notes` as presenter-only notes; do not render them as visible slide text.
-- Use low reasoning only; focus on direct image generation, not analysis.
-
-Shared deck generation context:
-- Deck title: <title>
-- Audience: <audience>
-- Aspect ratio and size: <16:9 / width x height>
-- Global style: <style description>
-- Palette: <colors>
-- Typography: <fonts and text style>
-- Logos/template assets: <ids and paths>
-- Full page list: <page numbers and titles/claims>
-- Global negative rules: <rules shared by all pages>
-- QA acceptance rules: <one full-slide PNG, all text inside image, no placeholder, no PPT overlay>
-- Asset index: <stable ids, captions, usage, localized paths>
-
-For each assigned page:
-- Page: <page-number>
-- Size: <width>x<height>, 16:9 unless specified otherwise
-- Output PNG path: <path>.png
-- Speaker notes: <speaker_notes; presenter-only, not visible text>
-- Fidelity: <free|light_redraw|strict_embed>
-- Protocol page slice:
-  <JSON for only this page>
-- Reference assets to inspect first:
-  <paths to source images, table PNGs, logos, or template images relevant to this page>
-- Final image prompt:
-  <one complete final full-slide image prompt>
-- Negative prompt:
-  <negative prompt>
-
-Required behavior:
-1. Inspect/use assigned reference images and table PNGs when present.
-2. Directly call Codex built-in image generation via the installed `imagegen` skill, `$imagegen`, or `image_gen` for each assigned page.
-3. Save or return the real generated PNG artifact for each page.
-4. Stay within the assigned page budget; if generation is still running, keep working until the wait budget is reached.
-5. Return only:
-   - page number
-   - generated PNG path
-   - status: generated or failed
-   - one-line failure reason if failed.
-
-Failure conditions:
-- Returning only a prompt is failure.
-- Returning SVG/HTML/placeholder is failure.
-- Returning an HTML/CSS/canvas/headless Chrome screenshot or local deterministic renderer PNG is failure.
-- Returning a background-only image is failure.
-- Suggesting later PPT text overlay is failure.
-- Treating missing `OPENAI_API_KEY` as proof that Codex built-in image generation is unavailable is failure.
-- In `strict_embed`, changing numbers, curves, table headers, logos, or figure captions is failure.
-```
-
-Leader MUST NOT treat a subagent response as successful unless it includes a real generated PNG path for each assigned page.
-
-## Manifest And QA
-
-`imagegen-jobs.json` stores execution state only. MUST NOT move content truth out of `deck-protocol.json`.
-
-Create `png-manifest.json` only after all pages are `generated` or `accepted`:
-
-```json
-{
-  "kind": "image-first-ppt-png-manifest",
-  "items": [
-    { "page": 1, "status": "generated", "path": "output/slide-01.png" }
-  ]
-}
-```
-
-Manifest requirements:
-
-- one item per planned slide;
-- every item has `status: "generated"`;
-- every path points to a real `.png`;
-- no prompt sheet, SVG, HTML, screenshot of a prompt, or placeholder image.
-
-Backfill rules:
-
-- MUST validate file existence.
-- MUST validate `.png` extension.
-- MUST validate PNG magic bytes.
-- MUST reject placeholder markers.
-- MUST reject tiny files as final slides.
-- MUST preserve page order by `page`.
-
-Run `visual-qa` before assembly. Level 1 checks file existence, PNG magic bytes, dimensions, tiny files, and one image per page. Level 2 checks placeholder markers and missing required references.
+- `style_lock` in `imagegen-jobs.json` is the canonical visual consistency contract across workers.
+- Default subagent strategy is a lightweight context packet with `reasoning_effort: "low"`; forked context is optional and must not be combined with reasoning effort.
+- Visual review is explicit opt-in. Deterministic `visual-qa` still runs before assembly.
 
 ## Internal Tools
 
-Prefer MCP as the internal tool layer when available. Keep MCP as the internal tool layer, not a separate public skill surface.
-
-- `reference_intake`, `pptx_reference_intake`, `validate_deck_protocol`
-- `protocol_patch`
-- `asset_index_create`
-- `visual_plan`, `generate_assets`
-- `imagegen_jobs_create`, `imagegen_jobs_backfill`, `imagegen_jobs_status`, `imagegen_jobs_to_manifest`
-- `visual_qa`
-- `assemble_image_ppt`, `qa_pptx`
-- `parse_paper_local`
-
-CLI equivalents live under `node plugins/ppt-composer/src/cli.mjs`.
-CLI job tools include `imagegen-jobs-create`, `imagegen-jobs-backfill`, `imagegen-jobs-status`, `imagegen-jobs-to-manifest`, `visual-qa`, and `asset-index-create`.
-
-## Failure Conditions
-
-Stop and report the blocker when:
-
-- protocol is unconfirmed;
-- a generated page is missing;
-- a page output is not PNG;
-- visual QA fails without manual override note;
-- `strict_embed` evidence was altered;
-- final PPTX QA does not show one picture per slide and zero text overlays.
+Prefer MCP as the internal tool layer when available. Keep MCP as the internal tool layer, not a separate public skill surface. Read [references/tools-and-failures.md](references/tools-and-failures.md) for the complete tool list and failure conditions.

@@ -33,6 +33,22 @@ const child = spawn(
   }
 );
 
+child.on("error", (error) => {
+  if (error.code === "ENOENT") {
+    console.error([
+      "PPT Composer could not start mineru-open-mcp because uvx was not found.",
+      "Install uv/uvx, or disable this MCP server if MinerU parsing is not needed.",
+      "",
+      "After installing uvx, run this once from the plugin root:",
+      "  npm run prewarm:mineru"
+    ].join("\n"));
+    process.exit(1);
+  }
+
+  console.error(`Failed to start mineru-open-mcp: ${error.message}`);
+  process.exit(1);
+});
+
 child.on("exit", (code, signal) => {
   if (signal) {
     process.kill(process.pid, signal);

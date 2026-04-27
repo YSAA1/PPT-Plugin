@@ -197,47 +197,90 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.deepEqual(skillFiles, ['skills/image-first-ppt/SKILL.md']);
 
   const skillSource = await readFile(path.join(pluginRoot, 'skills/image-first-ppt/SKILL.md'), 'utf8');
+  const protocolReference = await readFile(path.join(pluginRoot, 'skills/image-first-ppt/references/protocol.md'), 'utf8');
+  const workerReference = await readFile(path.join(pluginRoot, 'skills/image-first-ppt/references/image-generation-workers.md'), 'utf8');
+  const qaReference = await readFile(path.join(pluginRoot, 'skills/image-first-ppt/references/manifest-visual-qa.md'), 'utf8');
+  const toolsReference = await readFile(path.join(pluginRoot, 'skills/image-first-ppt/references/tools-and-failures.md'), 'utf8');
+  const fullSkillReference = [skillSource, protocolReference, workerReference, qaReference, toolsReference].join('\n');
+  assert.ok(skillSource.split('\n').length < 140);
+  assert.match(skillSource, /Progressive Loading/i);
+  assert.match(skillSource, /references\/protocol\.md/i);
+  assert.match(skillSource, /references\/image-generation-workers\.md/i);
+  assert.match(skillSource, /references\/manifest-visual-qa\.md/i);
+  assert.match(skillSource, /references\/tools-and-failures\.md/i);
   assert.match(skillSource, /deck-protocol\.json/i);
+  assert.match(skillSource, /Requirement Gate/i);
+  assert.match(skillSource, /ask only for the missing fields and STOP/i);
+  assert.match(skillSource, /Stop condition: any required item is unknown/i);
   assert.match(skillSource, /Protocol Confirmation Gate/i);
-  assert.match(skillSource, /confirmation as authorization to use bounded image-generation subagents/i);
-  assert.match(skillSource, /For multi-page decks, MUST dispatch bounded image-generation subagents/i);
-  assert.match(skillSource, /2-6 pages: MUST dispatch one subagent per page/i);
-  assert.match(skillSource, /7\+ pages: MUST dispatch 3-6 concurrent subagents/i);
-  assert.match(skillSource, /Estimate each subagent's runtime as `assigned_page_count \* per_image_budget`/i);
-  assert.match(skillSource, /wait at least 3 minutes for a one-page worker/i);
-  assert.match(skillSource, /If a page range would exceed the maximum wait time, split the range/i);
-  assert.match(skillSource, /reasoning_effort: "low"/i);
-  assert.match(skillSource, /leader MUST create one shared deck generation context/i);
-  assert.match(skillSource, /Every worker MUST receive the exact same shared deck generation context/i);
-  assert.match(skillSource, /MUST NOT rely on inherited chat history as the only consistency mechanism/i);
-  assert.match(skillSource, /MUST NOT call `spawn_agent` with `fork_context: true` when also setting `agent_type`/i);
-  assert.match(skillSource, /Preferred consistency-first shape is: omit `agent_type`, set `fork_context: true`/i);
-  assert.match(skillSource, /If role-less forked spawn fails, or if a role is required by the runtime, MUST omit `fork_context`/i);
-  assert.match(skillSource, /Context-packet fallback shape is: set `fork_context: false`/i);
-  assert.match(skillSource, /Shared deck generation context:/i);
-  assert.match(skillSource, /Do not edit prompts for other pages/i);
-  assert.match(skillSource, /Save or return the real generated PNG artifact for each page/i);
-  assert.match(skillSource, /Leader MUST NOT treat a subagent response as successful unless it includes a real generated PNG path/i);
-  assert.match(skillSource, /Silent fallback is FORBIDDEN/i);
-  assert.match(skillSource, /MUST wait for subagent results or failure status before creating `png-manifest\.json`/i);
-  assert.match(skillSource, /assigned page protocol slice/i);
-  assert.match(skillSource, /optional `speaker_notes`/i);
-  assert.match(skillSource, /Speaker notes MUST NOT be rendered inside the PNG/i);
-  assert.match(skillSource, /protocol -> `imagegen-jobs\.json` -> `png-manifest\.json` -> PPT speaker notes/i);
-  assert.match(skillSource, /Directly call Codex built-in image generation/i);
-  assert.match(skillSource, /missing `OPENAI_API_KEY` does not mean built-in `image_gen` is unavailable/i);
-  assert.match(skillSource, /generate-assets --provider codex.*prompt-sheet handoff/i);
+  assert.match(skillSource, /Ambiguous replies such as "继续", "ok", or "不错" do not authorize image generation/i);
+  assert.match(protocolReference, /Ambiguous replies such as "继续", "ok", or "不错" do not authorize image generation/i);
+  assert.match(skillSource, /Patch revisions only through protocol patch tools/i);
+  assert.match(protocolReference, /direct JSON edits are allowed only after recording the tool blocker/i);
+  assert.match(workerReference, /parallelism is worth the local startup cost/i);
+  assert.match(workerReference, /subagents may initialize the same plugin MCP servers as the leader/i);
+  assert.match(workerReference, /Do not spawn many image workers/i);
+  assert.match(workerReference, /2-6 pages: use the leader directly or at most 2 concurrent subagents/i);
+  assert.match(workerReference, /7\+ pages: MUST dispatch image-generation subagents/i);
+  assert.match(workerReference, /7-12 pages: use 5-6 concurrent workers by default/i);
+  assert.match(workerReference, /10 pages -> `2\+2\+2\+2\+1\+1` or `2\+2\+2\+2\+2`/i);
+  assert.match(workerReference, /MUST NOT reduce it to zero for 7\+ pages/i);
+  assert.match(workerReference, /Estimate each subagent's runtime as `assigned_page_count \* per_image_budget`/i);
+  assert.match(workerReference, /wait at least 3 minutes for a one-page worker/i);
+  assert.match(workerReference, /If a page range would exceed the maximum wait time, split the range/i);
+  assert.match(workerReference, /When `fork_context: true` is used, DO NOT set `reasoning_effort`/i);
+  assert.match(protocolReference, /Current image-first generation may restyle or redraw evidence/i);
+  assert.match(protocolReference, /structured PPTX inventory\/reflow lane/i);
+  assert.match(workerReference, /leader MUST create one shared deck generation context/i);
+  assert.match(skillSource, /style_lock/i);
+  assert.match(workerReference, /Forked chat history is supplemental only/i);
+  assert.match(workerReference, /A worker prompt that does not include the `style_lock` is invalid/i);
+  assert.match(workerReference, /Every worker MUST receive the exact same `style_lock`/i);
+  assert.match(workerReference, /`style_lock` MUST include stable visual fields/i);
+  assert.match(workerReference, /MUST NOT rely on inherited chat history as the only consistency mechanism/i);
+  assert.match(workerReference, /MUST NOT call `spawn_agent` with `fork_context: true` when also setting `agent_type`/i);
+  assert.match(workerReference, /Default shape is the lightweight context packet/i);
+  assert.match(workerReference, /set `reasoning_effort: "low"`/i);
+  assert.match(workerReference, /If role-less forked spawn fails, or if a role\/reasoning override is required by the runtime, MUST omit `fork_context`/i);
+  assert.match(workerReference, /Forking is optional only when the runtime benefits from extra history/i);
+  assert.match(workerReference, /Each default worker packet contains only: verbatim `style_lock`/i);
+  assert.match(workerReference, /fork_context: true,\n  reasoning_effort: "low"/i);
+  assert.match(workerReference, /Shared deck generation context:/i);
+  assert.match(workerReference, /Do not edit prompts for other pages/i);
+  assert.match(workerReference, /Save or return the real generated PNG artifact for each page/i);
+  assert.match(workerReference, /Leader MUST NOT treat a subagent response as successful unless it includes a real generated PNG path/i);
+  assert.match(workerReference, /Silent fallback is FORBIDDEN/i);
+  assert.match(workerReference, /fallback to zero workers is allowed only after a concrete spawn unavailable\/blocked\/failed condition is observed/i);
+  assert.match(workerReference, /MUST wait for subagent results or failure status before creating `png-manifest\.json`/i);
+  assert.match(workerReference, /assigned page protocol slice/i);
+  assert.match(protocolReference, /optional `speaker_notes`/i);
+  assert.match(protocolReference, /Speaker notes MUST NOT be rendered inside the PNG/i);
+  assert.match(protocolReference, /protocol -> `imagegen-jobs\.json` -> `png-manifest\.json` -> PPT speaker notes/i);
+  assert.match(workerReference, /Directly call Codex built-in image generation/i);
+  assert.match(workerReference, /missing `OPENAI_API_KEY` does not mean built-in `image_gen` is unavailable/i);
+  assert.match(workerReference, /generate-assets --provider codex.*prompt-sheet handoff/i);
   assert.match(skillSource, /prompt sheet.*finished slide/i);
-  assert.match(skillSource, /PNG manifest is the gate for assembly/i);
+  assert.match(qaReference, /PNG manifest is the gate for assembly/i);
   assert.match(skillSource, /background\/base draft/i);
   assert.match(skillSource, /no later PPT text overlay/i);
   assert.match(skillSource, /MCP as the internal tool layer/i);
-  assert.match(skillSource, /asset-index-create/i);
-  assert.match(skillSource, /imagegen-jobs-create/i);
+  assert.match(toolsReference, /asset-index-create/i);
+  assert.match(toolsReference, /imagegen-jobs-create/i);
   assert.match(skillSource, /visual-qa/i);
-  assert.match(skillSource, /pptx_reference_intake/i);
-  assert.match(skillSource, /parse_paper_local/i);
-  assert.match(skillSource, /assemble_image_ppt/i);
+  assert.match(qaReference, /Visual review prompt template/i);
+  assert.match(qaReference, /consistency: Does this PNG match the confirmed deck visual system/i);
+  assert.match(qaReference, /protocol_alignment: Does this PNG follow the page claim/i);
+  assert.match(qaReference, /reference_fidelity: Are referenced figures/i);
+  assert.match(qaReference, /text_legibility: Is all visible slide text readable/i);
+  assert.match(qaReference, /artifact_quality: Are there obvious generated-image defects/i);
+  assert.match(qaReference, /The leader owns deterministic QA, manifest gating/i);
+  assert.match(qaReference, /Once visual review is enabled, set `visualReview\.enabled=true`/i);
+  assert.match(qaReference, /Manual override may only bypass overrideable review findings/i);
+  assert.match(toolsReference, /Manual override MUST NOT bypass missing PNG, non-PNG, placeholder PNG, tiny PNG/i);
+  assert.match(toolsReference, /pptx_reference_intake/i);
+  assert.match(toolsReference, /parse_paper_local/i);
+  assert.match(toolsReference, /assemble_image_ppt/i);
+  assert.match(fullSkillReference, /structured PPTX inventory\/reflow lane/i);
 
   const pluginManifest = JSON.parse(await readFile(path.join(pluginRoot, '.codex-plugin/plugin.json'), 'utf8'));
   assert.equal(pluginManifest.skills, './skills/');
@@ -251,6 +294,11 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.equal(mcpConfig.mcpServers['mineru-open-mcp'].cwd, '.');
   assert.equal(mcpConfig.mcpServers['ppt-render-mcp'].cwd, '.');
 
+  const packageJson = JSON.parse(await readFile(path.join(pluginRoot, 'package.json'), 'utf8'));
+  assert.equal(packageJson.scripts.prewarm, 'node ./scripts/prewarm-deps.mjs');
+  assert.equal(packageJson.scripts['prewarm:mineru'], 'node ./scripts/prewarm-deps.mjs --include-mineru');
+  assert.equal(packageJson.dependencies.jszip, '^3.10.1');
+
   const mineruWrapper = await readFile(
     path.join(pluginRoot, 'scripts/mineru-open-mcp-with-images.py'),
     'utf8',
@@ -263,15 +311,28 @@ test('plugin exposes only the image-first-ppt skill', async () => {
     'utf8',
   );
   assert.match(nodeMineruWrapper, /mineru-open-mcp-with-images\.py/);
+  assert.match(nodeMineruWrapper, /prewarm:mineru/);
   assert.match(nodeMineruWrapper, /buildPluginEnv/);
 
   const nodeRenderWrapper = await readFile(
     path.join(pluginRoot, 'scripts/run-ppt-render-mcp.mjs'),
     'utf8',
   );
-  assert.match(nodeRenderWrapper, /npm/);
   assert.match(nodeRenderWrapper, /ppt-render-mcp\.mjs/);
+  assert.match(nodeRenderWrapper, /npm run prewarm/);
+  assert.match(nodeRenderWrapper, /npmCommand/);
+  assert.match(nodeRenderWrapper, /spawnSync/);
+  assert.match(nodeRenderWrapper, /PPT_COMPOSER_DISABLE_AUTO_INSTALL/);
+  assert.match(nodeRenderWrapper, /process\.stderr\.write/);
   assert.match(nodeRenderWrapper, /buildPluginEnv/);
+
+  const prewarmScript = await readFile(
+    path.join(pluginRoot, 'scripts/prewarm-deps.mjs'),
+    'utf8',
+  );
+  assert.match(prewarmScript, /--include-mineru/);
+  assert.match(prewarmScript, /mineru-open-mcp/);
+  assert.match(prewarmScript, /npmCommand/);
 });
 
 test('MCP wrappers load .env files without overriding shell environment', async () => {
@@ -412,6 +473,8 @@ test('CLI help advertises enhancement commands', async () => {
     'imagegen-jobs-create',
     'imagegen-jobs-status',
     'imagegen-jobs-backfill',
+    'imagegen-jobs-review',
+    'imagegen-jobs-revise',
     'imagegen-jobs-to-manifest',
     'visual-qa',
     'pptx-reference-intake',
@@ -437,6 +500,8 @@ test('MCP server registers enhancement tools', async () => {
     'imagegen_jobs_create',
     'imagegen_jobs_status',
     'imagegen_jobs_backfill',
+    'imagegen_jobs_review',
+    'imagegen_jobs_revise',
     'imagegen_jobs_to_manifest',
     'visual_qa',
     'pptx_reference_intake',
@@ -646,14 +711,51 @@ test('imagegen jobs gate manifest creation and visual QA blocks bad PNGs', async
   assert.equal(createResult.summary.total, 20);
   assert.equal(createResult.summary.pending, 20);
   const jobsAfterCreate = JSON.parse(await readFile(jobsPath, 'utf8'));
+  assert.equal(jobsAfterCreate.style_lock.id, 'deck-style-lock-v1');
+  assert.equal(jobsAfterCreate.style_lock.deck.title, 'Jobs Demo');
+  assert.equal(jobsAfterCreate.style_lock.page_list.length, 20);
+  assert.match(jobsAfterCreate.style_lock.worker_rule, /Forked chat history is never the source of truth/);
+  assert.equal(jobsAfterCreate.style_lock.style.density, 'medium');
+  assert.match(jobsAfterCreate.style_lock.style.font_scale, /readable/);
+  assert.match(jobsAfterCreate.style_lock.style.chart_style, /consulting\/research/);
+  assert.match(jobsAfterCreate.style_lock.style.margins, /whitespace/);
+  assert.deepEqual(jobsAfterCreate.visualReview.dimensions, [
+    'consistency',
+    'protocol_alignment',
+    'reference_fidelity',
+    'text_legibility',
+    'artifact_quality',
+  ]);
+  assert.equal(jobsAfterCreate.visualReview.enabled, false);
+  assert.equal(jobsAfterCreate.pages[0].worker_context.style_lock_id, 'deck-style-lock-v1');
+  assert.equal(jobsAfterCreate.pages[0].worker_context.default_spawn, 'context_packet_low_reasoning');
   assert.equal(jobsAfterCreate.pages[0].speaker_notes, 'Presenter note for page one.');
   assert.equal(jobsAfterCreate.pages[1].speaker_notes, 'Alias note line one.\nAlias note line two.');
   assert.equal(jobsAfterCreate.pages[2].speaker_notes, '中文备注会写入 PPT notes。');
 
   const firstPng = path.join(outDir, 'slide-01.png');
   await writeSlidePng(firstPng);
-  const backfillResult = await runCli(['imagegen-jobs-backfill', '--jobs', jobsPath, '--page', '1', '--png', firstPng]);
+  const backfillResult = await runCli([
+    'imagegen-jobs-backfill',
+    '--jobs',
+    jobsPath,
+    '--page',
+    '1',
+    '--png',
+    firstPng,
+    '--execution-summary',
+    JSON.stringify({
+      claim_followed: true,
+      reference_assets_used: 'none assigned',
+      fidelity_followed: true,
+      negative_prompt_avoided: true,
+      uncertainties: '',
+    }),
+  ]);
   assert.equal(backfillResult.summary.generated, 1);
+  const jobsAfterBackfill = JSON.parse(await readFile(jobsPath, 'utf8'));
+  assert.equal(jobsAfterBackfill.pages[0].execution_summary.claim_followed, true);
+  assert.equal(jobsAfterBackfill.pages[0].execution_summary.reference_assets_used, 'none assigned');
   await assert.rejects(
     runCli(['imagegen-jobs-to-manifest', '--jobs', jobsPath, '--out', manifestPath]),
     /Cannot create PNG manifest/,
@@ -695,6 +797,224 @@ test('imagegen jobs gate manifest creation and visual QA blocks bad PNGs', async
     runCli(['visual-qa', '--protocol', protocolPath, '--jobs', badJobsPath, '--out', path.join(outDir, 'bad-qa.json')]),
     /tiny_png/,
   );
+  await assert.rejects(
+    runCli([
+      'visual-qa',
+      '--protocol',
+      protocolPath,
+      '--jobs',
+      badJobsPath,
+      '--out',
+      path.join(outDir, 'bad-qa-override.json'),
+      '--manual-override-note',
+      'Do not block draft assembly.',
+    ]),
+    /tiny_png/,
+  );
+  const badOverride = JSON.parse(await readFile(path.join(outDir, 'bad-qa-override.json'), 'utf8'));
+  assert.equal(badOverride.status, 'fail');
+  assert.equal(badOverride.summary.hardFailures, 1);
+});
+
+test('imagegen visual review gates accepted pages and preserves superseded attempts', async () => {
+  const outDir = await mkdtemp(path.join(tmpdir(), 'ppt-composer-visual-review-'));
+  const protocolPath = path.join(outDir, 'deck-protocol.json');
+  const jobsPath = path.join(outDir, 'imagegen-jobs.json');
+  const manifestPath = path.join(outDir, 'png-manifest.json');
+  const qaPath = path.join(outDir, 'visual-qa.json');
+  const protocol = {
+    kind: 'ppt-composer-deck-protocol',
+    version: '0.1',
+    mode: 'brief_mode',
+    deck: { title: 'Visual Review Demo', language: 'zh', audience: 'team', page_count: 2, aspect_ratio: '16:9' },
+    style: { description: 'consistent research consulting deck', template_image_ids: [], logo_ids: [], palette: [], typography: '' },
+    assets: [],
+    pages: [1, 2].map((page) => ({
+      page,
+      title: `Page ${page}`,
+      claim: `Claim ${page}`,
+      content_inputs: { text: [], tables: [], images: [] },
+      reference_asset_ids: [],
+      fidelity: 'free',
+      final_image_prompt: `Create page ${page} with visible title and claim.`,
+      negative_prompt: 'No watermark, no unreadable text.',
+      output_png: `slides/slide-${String(page).padStart(2, '0')}.png`,
+      free_generation: true,
+    })),
+  };
+  await writeFile(protocolPath, `${JSON.stringify(protocol, null, 2)}\n`);
+  await runCli(['imagegen-jobs-create', '--protocol', protocolPath, '--out', jobsPath]);
+
+  const pageOnePng = path.join(outDir, 'slide-01.png');
+  const pageTwoFirstPng = path.join(outDir, 'slide-02-first.png');
+  await writeSlidePng(pageOnePng);
+  await writeSlidePng(pageTwoFirstPng);
+  await runCli(['imagegen-jobs-backfill', '--jobs', jobsPath, '--page', '1', '--png', pageOnePng]);
+  await runCli(['imagegen-jobs-backfill', '--jobs', jobsPath, '--page', '2', '--png', pageTwoFirstPng]);
+
+  const needsReview = await runCli(['imagegen-jobs-review', '--jobs', jobsPath, '--page', '1', '--note', 'Ready for visual review.']);
+  assert.equal(needsReview.status, 'needs_review');
+  assert.equal(needsReview.summary.needsReview, 1);
+  assert.equal(needsReview.summary.visualReviewEnabled, true);
+  await assert.rejects(
+    runCli(['imagegen-jobs-to-manifest', '--jobs', jobsPath, '--out', manifestPath]),
+    /accepted/,
+  );
+
+  const accepted = await runCli([
+    'imagegen-jobs-review',
+    '--jobs',
+    jobsPath,
+    '--page',
+    '1',
+    '--verdict',
+    'pass',
+    '--consistency',
+    'pass',
+    '--protocol-alignment',
+    'pass',
+    '--reference-fidelity',
+    'pass',
+    '--text-legibility',
+    'pass',
+    '--artifact-quality',
+    'pass',
+    '--note',
+    'Consistent with the deck and aligned with the protocol.',
+  ]);
+  assert.equal(accepted.status, 'accepted');
+  assert.equal(accepted.review.categories.protocol_alignment, 'pass');
+  assert.equal(accepted.review.categories.reference_fidelity, 'pass');
+  assert.equal(accepted.review.categories.text_legibility, 'pass');
+  assert.equal(accepted.review.categories.artifact_quality, 'pass');
+
+  const rejected = await runCli([
+    'imagegen-jobs-review',
+    '--jobs',
+    jobsPath,
+    '--page',
+    '2',
+    '--verdict',
+    'fail',
+    '--consistency',
+    'fail',
+    '--protocol-alignment',
+    'fail',
+    '--reference-fidelity',
+    'fail',
+    '--text-legibility',
+    'warn',
+    '--artifact-quality',
+    'warn',
+    '--note',
+    'Style is inconsistent and the slide drifts from the prompt.',
+    '--revision-suggestion',
+    'Tighten the prompt around the original claim and deck typography.',
+  ]);
+  assert.equal(rejected.status, 'rejected');
+  assert.equal(rejected.review.categories.consistency, 'fail');
+  assert.equal(rejected.review.categories.reference_fidelity, 'fail');
+
+  await assert.rejects(
+    runCli(['visual-qa', '--protocol', protocolPath, '--jobs', jobsPath, '--out', qaPath]),
+    /visual_review_rejected/,
+  );
+  const visualFail = JSON.parse(await readFile(qaPath, 'utf8'));
+  assert.equal(visualFail.status, 'fail');
+  assert.equal(visualFail.visualReview.enabled, true);
+  assert.deepEqual(visualFail.visualReview.dimensions, [
+    'consistency',
+    'protocol_alignment',
+    'reference_fidelity',
+    'text_legibility',
+    'artifact_quality',
+  ]);
+  assert.equal(visualFail.visualReview.pages[1].verdict, 'fail');
+  assert.match(visualFail.visualReview.pages[1].revisionSuggestion, /Tighten the prompt/);
+  assert.equal(visualFail.visualReview.pages[1].categories.reference_fidelity, 'fail');
+
+  const override = await runCli([
+    'visual-qa',
+    '--protocol',
+    protocolPath,
+    '--jobs',
+    jobsPath,
+    '--out',
+    path.join(outDir, 'visual-qa-override.json'),
+    '--manual-override-note',
+    'Reviewer accepts risk for an emergency draft.',
+  ]);
+  assert.equal(override.status, 'pass');
+  assert.equal(override.manualOverride.note, 'Reviewer accepts risk for an emergency draft.');
+
+  const revision = await runCli([
+    'imagegen-jobs-revise',
+    '--jobs',
+    jobsPath,
+    '--page',
+    '2',
+    '--note',
+    'Regenerate only page 2.',
+    '--revision-suggestion',
+    'Use the confirmed page claim and consistent visual system.',
+  ]);
+  assert.equal(revision.status, 'revision_requested');
+  assert.equal(revision.revision.superseded_path, pageTwoFirstPng);
+  await assert.rejects(
+    runCli(['imagegen-jobs-to-manifest', '--jobs', jobsPath, '--out', manifestPath]),
+    /accepted/,
+  );
+
+  const pageTwoSecondPng = path.join(outDir, 'slide-02-second.png');
+  await writeSlidePng(pageTwoSecondPng);
+  const regenerated = await runCli(['imagegen-jobs-backfill', '--jobs', jobsPath, '--page', '2', '--png', pageTwoSecondPng]);
+  assert.equal(regenerated.summary.generated, 1);
+  assert.equal(regenerated.summary.accepted, 1);
+
+  const pageTwoAccepted = await runCli([
+    'imagegen-jobs-review',
+    '--jobs',
+    jobsPath,
+    '--page',
+    '2',
+    '--verdict',
+    'warn',
+    '--consistency',
+    'pass',
+    '--protocol-alignment',
+    'pass',
+    '--reference-fidelity',
+    'pass',
+    '--text-legibility',
+    'pass',
+    '--artifact-quality',
+    'warn',
+    '--note',
+    'Regenerated page now matches the protocol, with minor artifact risk recorded.',
+  ]);
+  assert.equal(pageTwoAccepted.status, 'accepted');
+  assert.equal(pageTwoAccepted.review.verdict, 'warn');
+
+  const reviewedJobs = JSON.parse(await readFile(jobsPath, 'utf8'));
+  assert.equal(reviewedJobs.pages[1].attempts.length, 2);
+  assert.equal(reviewedJobs.pages[1].attempts[0].status, 'superseded');
+  assert.equal(reviewedJobs.pages[1].attempts[1].status, 'accepted');
+  assert.deepEqual(reviewedJobs.pages[1].superseded_pngs, [pageTwoFirstPng]);
+  assert.equal(reviewedJobs.pages[1].accepted_png, pageTwoSecondPng);
+
+  const finalQa = await runCli(['visual-qa', '--protocol', protocolPath, '--jobs', jobsPath, '--out', path.join(outDir, 'visual-qa-final.json')]);
+  assert.equal(finalQa.status, 'pass');
+  assert.equal(finalQa.summary.visualReviewFailures, 0);
+  assert.equal(finalQa.summary.warnings, 1);
+  assert.equal(finalQa.visualReview.pages[1].acceptedPng, pageTwoSecondPng);
+  assert.deepEqual(finalQa.visualReview.pages[1].supersededPngs, [pageTwoFirstPng]);
+
+  const manifestResult = await runCli(['imagegen-jobs-to-manifest', '--jobs', jobsPath, '--out', manifestPath]);
+  assert.equal(manifestResult.summary.readyForManifest, true);
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  assert.ok(manifest.items.every((item) => item.sourceStatus === 'accepted'));
+  assert.equal(manifest.items[1].path, pageTwoSecondPng);
+  assert.equal(manifest.items[1].visual_review.verdict, 'warn');
 });
 
 test('pptx reference intake extracts media and theme without requiring LibreOffice thumbnails', async () => {

@@ -28,6 +28,17 @@ PPT Composer 是一个 Codex 插件，可以把需求描述、论文、PDF、报
   <img src="assets/ppt-composer-system-overview.png" alt="PPT Composer 系统流程图">
 </p>
 
+## 新用户先看这里
+
+如果你觉得协议、QA、返工规则有点抽象，先看这两份图文说明：
+
+- [用户指南](docs/user_guid/README.md)：用图解释整体流程、协议文件、视觉复审和按页返工。
+- [当前使用案例说明](docs/user_guid/current-use-cases.zh-CN.md)：给出论文汇报、纯需求生成、参考图定制、严格保留图表、按页返工等实际提示词。
+
+<p align="center">
+  <img src="docs/user_guid/images/workflow-overview.png" alt="PPT Composer 使用流程">
+</p>
+
 ## 适合谁
 
 适合这些场景：
@@ -51,7 +62,7 @@ ppt-composer:image-first-ppt
   -> 协议补丁工具
   -> 本地资产索引
   -> 生图任务清单
-  -> 视觉 QA
+  -> 确定性 QA 与视觉复审
   -> 完整 PNG manifest
   -> PPTX
 ```
@@ -111,7 +122,7 @@ PPT Composer 会把协议修改和生成状态保存在内部文件里：
 | --- | --- |
 | `reference-assets/asset-index.json` | 本地化后的参考文件和 URL，包含稳定 id、hash、MIME、大小、说明和用途。 |
 | `imagegen-jobs.json` | 每页生图任务状态；`deck-protocol.json` 仍然是内容真相。 |
-| `visual-qa.json` | 组装前的确定性 PNG 检查；失败会阻断组装，除非写入人工 override note。 |
+| `visual-qa.json` | PNG 检查和视觉复审报告；记录缺失、过小、placeholder、一致性问题、协议偏离和基本图像问题。 |
 | `png-manifest.json` | 最终组装门禁；只有每页都有真实生成 PNG 后才创建。 |
 
 ### 如何修改协议
@@ -210,7 +221,33 @@ codex plugin marketplace add .
 
 打开 `PPT Composer`，点击 `Install plugin`。
 
-PPT Composer 会把 skill 和 MCP server 配置一起打包成 Codex 插件。第一次启动 MCP 时，如果安装后的插件 cache 里缺少 Node 运行依赖，内置启动器会自动在该 cache 目录内安装依赖。
+PPT Composer 会把 skill 和 MCP server 配置一起打包成 Codex 插件。第一次启动 MCP 时，Node MCP 启动器会在已安装插件 cache 内自动安装缺失的运行依赖。安装日志会写到 stderr，不会污染 MCP 的 stdio 协议通道。
+
+### 依赖预热
+
+“预热依赖”的意思是：插件安装或更新后，先把本地运行依赖准备好，再让 Codex 启动 MCP server。对大多数用户这是可选的，因为 Node 依赖缺失时会自动安装一次；它主要用于网络很慢导致首次 MCP 启动超时，或者你想提前准备 MinerU 的 `uvx` 环境。
+
+如果你是在 clone 仓库里开发，或者首次 MCP 启动提示依赖缺失，运行：
+
+```bash
+cd plugins/ppt-composer
+npm run prewarm
+```
+
+如果你是通过 Codex 安装插件，并且 MCP 报错里打印了已安装插件路径，就进入那个插件根目录运行同一条命令：
+
+```bash
+cd <installed-plugin-root>
+npm run prewarm
+```
+
+如果需要用 MinerU 解析 PDF / Office / 图片参考资料，再运行：
+
+```bash
+npm run prewarm:mineru
+```
+
+预热后重启 Codex，让 MCP server 从已经准备好的依赖缓存启动。
 
 MCP 启动器是跨平台 Node 脚本。在 Windows 上会调用 `npm.cmd` / `uvx.cmd`，并且插件使用 JSZip 解析 DOCX/PPTX，不依赖系统自带 `unzip` 命令。
 
@@ -299,8 +336,10 @@ export PPT_COMPOSER_ENV_FILE="$HOME/.config/ppt-composer/env"
 5. Codex 用协议补丁工具修改并展示更新后的计划。
 6. 你明确确认协议。
 7. Codex 按页生成 PNG。
-8. 运行视觉 QA，并生成完整 PNG manifest。
-9. PNG 齐全后组装 PPTX。
+8. 运行确定性 QA 和视觉复审；多页 deck 优先用 bounded vision/reviewer subagent 逐页检查。
+9. 失败页按页返工；如果需要改 prompt 或保真规则，先 patch `deck-protocol.json`。
+10. 每页都生成完成后创建 PNG manifest；如果启用了视觉复审，则必须每页都是 accepted。
+11. PNG 通过门禁后组装 PPTX。
 
 ## 质量边界
 
@@ -312,6 +351,9 @@ PPT Composer 会拒绝这些半成品：
 - 使用 placeholder。
 - PNG 缺失时提前组装 PPTX。
 - `strict_embed` 页改动原始数字、曲线、表头、logo 或图注。
+- 视觉复审失败的问题，例如风格不一致、偏离协议、文字不可读、水印、表格或 logo 变形、空白区域、只生成背景图。
+
+如果只有某一页失败，PPT Composer 应该只返工这一页，而不是重做整份 PPT。
 
 ## 验证
 
