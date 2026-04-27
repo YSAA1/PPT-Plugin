@@ -29,9 +29,10 @@ Execute in this exact order. Do not skip forward.
 3. Validate `deck-protocol.json`.
 4. Patch revisions only through protocol patch tools when possible.
 5. Present the protocol summary and wait for explicit confirmation. This is the Protocol Confirmation Gate.
-6. After confirmation, generate final full-slide PNGs directly with Codex image generation. Treat confirmation as authorization to use bounded image-generation subagents for the confirmed pages.
-   - For multi-page decks, MUST dispatch bounded image-generation subagents before generating directly in the leader.
-   - The leader MUST NOT silently do all confirmed pages alone unless subagent spawning is unavailable or has already failed.
+6. After confirmation, generate final full-slide PNGs directly with Codex image generation. Treat confirmation as authorization to use bounded image-generation subagents for the confirmed pages only when parallelism is worth the local startup cost.
+   - In Codex App/plain Codex sessions, subagents may initialize the same plugin MCP servers as the leader. Do not spawn many image workers if that would multiply `ppt-render-mcp`, `mineru-open-mcp`, `uvx`, or Python startup.
+   - For multi-page decks, prefer the leader or a small bounded worker batch when local MCP startup is expensive. Record the reason when choosing direct generation over subagents.
+   - The leader MUST NOT silently ignore failed subagent spawning; if fallback is used, record whether it was due to runtime rejection, MCP startup cost, or imagegen failure.
 7. Track page status in `imagegen-jobs.json`.
 8. Run deterministic `visual-qa` to check whether the generated PNG files are structurally assembleable.
 9. Run the internal visual review loop for each page when image quality is in scope:
@@ -80,6 +81,13 @@ Use only these fidelity modes:
 - `free`: approved brief/style only.
 - `light_redraw`: preserve facts, trends, key numbers, labels, and meaning while restyling.
 - `strict_embed`: preserve referenced figures, tables, headers, values, logos, and captions.
+
+Existing-PPT hard-preservation requests are a different product lane:
+
+- If the user asks to optimize an existing PPT while every original page's text, figures, charts, tables, logos, and images must be fully preserved, DO NOT treat image generation as a faithful page editor.
+- Current image-first generation may restyle or redraw evidence; it cannot guarantee exact text/table/chart reproduction from an existing PPT.
+- Supported conservative fallback: embed each original full-slide screenshot as locked evidence, then only add external framing if the user accepts that the internal page layout will not be reflowed.
+- Otherwise stop before generation and explain that the missing capability is a structured PPTX inventory/reflow lane: parse each page's text, images, charts, tables, positions, z-order, and styles; optimize layout using those locked objects; then run exactness QA.
 
 Use `asset-index-create` or `reference-intake` to keep `reference-assets/asset-index.json` synchronized. Page content MUST reference stable asset ids, not raw paths.
 
@@ -154,8 +162,8 @@ Primary path: Codex built-in image generation via the installed `imagegen` skill
 Leader must split work as follows:
 
 - 1 page: the leader may generate directly.
-- 2-6 pages: MUST dispatch one subagent per page.
-- 7+ pages: MUST dispatch 3-6 concurrent subagents, each assigned a consecutive page range.
+- 2-6 pages: use the leader directly or at most 2 concurrent subagents unless the user explicitly prioritizes speed over local resource use.
+- 7+ pages: use at most 3 concurrent subagents by default; raise to 4-6 only when the user explicitly accepts higher local MCP/startup load.
 - Each page still requires an independent PNG file.
 
 Subagent runtime and model rules:
@@ -166,7 +174,8 @@ Subagent runtime and model rules:
 - If a page range would exceed the maximum wait time, split the range into smaller subagent tasks.
 - Prefer more parallel one-page workers over long sequential multi-page workers when the deck has 2-6 pages.
 - For 7+ pages, keep at most 6 concurrent subagents, but size each consecutive range so the range fits inside the wait budget.
-- Image workers MUST use `reasoning_effort: "low"` unless the user explicitly asks for deeper reasoning. The worker is executing a fixed image prompt, not planning the deck.
+- Image workers SHOULD use low reasoning when the spawn API shape allows it. The worker is executing a fixed image prompt, not planning the deck.
+- When `fork_context: true` is used, DO NOT set `reasoning_effort`; the current runtime can reject full-history fork calls that also set reasoning effort.
 - The leader may use stronger reasoning for planning, but worker prompts MUST stay narrow and execution-focused.
 
 Shared context rules:
@@ -182,8 +191,8 @@ Shared context rules:
 Spawn call rules:
 
 - MUST NOT call `spawn_agent` with `fork_context: true` when also setting `agent_type` / role.
-- Preferred consistency-first shape is: omit `agent_type`, set `fork_context: true`, set `reasoning_effort: "low"`, and still include the shared deck generation context in the worker prompt.
-- If role-less forked spawn fails, or if a role is required by the runtime, MUST omit `fork_context`; write the shared deck generation context and complete task context into `message` or `items`.
+- Preferred consistency-first shape is: omit `agent_type`, set `fork_context: true`, omit `reasoning_effort`, and still include the shared deck generation context in the worker prompt.
+- If role-less forked spawn fails, or if a role/reasoning override is required by the runtime, MUST omit `fork_context`; write the shared deck generation context and complete task context into `message` or `items`.
 - Context-packet fallback shape is: set `fork_context: false` or omit it, set `reasoning_effort: "low"`, and put the shared deck generation context plus assigned page context in the worker prompt.
 - The fallback prompt MUST include the same `style_lock` JSON used by forked workers. Do not shorten, paraphrase, or rebuild the style contract per worker.
 - If subagent spawning is unavailable, blocked, or fails, the leader MAY fall back to direct generation, but MUST record the reason in `imagegen-jobs.json` notes or the final handoff. Silent fallback is FORBIDDEN.
@@ -194,7 +203,6 @@ Spawn call guardrail:
 ```text
 Allowed:
 spawn_agent({
-  reasoning_effort: "low",
   fork_context: true,
   message: "<worker prompt with shared deck generation context, assigned page protocol slice, and reference paths>"
 })
@@ -217,6 +225,13 @@ Forbidden:
 spawn_agent({
   agent_type: "<any role>",
   fork_context: true,
+  ...
+})
+
+Also forbidden:
+spawn_agent({
+  fork_context: true,
+  reasoning_effort: "low",
   ...
 })
 ```
