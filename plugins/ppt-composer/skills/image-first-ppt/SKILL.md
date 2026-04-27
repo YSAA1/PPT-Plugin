@@ -163,7 +163,7 @@ Leader must split work as follows:
 
 - 1 page: the leader may generate directly.
 - 2-6 pages: use the leader directly or at most 2 concurrent subagents unless the user explicitly prioritizes speed over local resource use.
-- 7+ pages: use at most 3 concurrent subagents by default; raise to 4-6 only when the user explicitly accepts higher local MCP/startup load.
+- 7+ pages: use at most 6 concurrent subagents by default; use fewer when local MCP/startup load is already high.
 - Each page still requires an independent PNG file.
 
 Subagent runtime and model rules:

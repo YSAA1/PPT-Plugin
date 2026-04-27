@@ -203,7 +203,7 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(skillSource, /subagents may initialize the same plugin MCP servers as the leader/i);
   assert.match(skillSource, /Do not spawn many image workers/i);
   assert.match(skillSource, /2-6 pages: use the leader directly or at most 2 concurrent subagents/i);
-  assert.match(skillSource, /7\+ pages: use at most 3 concurrent subagents by default/i);
+  assert.match(skillSource, /7\+ pages: use at most 6 concurrent subagents by default/i);
   assert.match(skillSource, /Estimate each subagent's runtime as `assigned_page_count \* per_image_budget`/i);
   assert.match(skillSource, /wait at least 3 minutes for a one-page worker/i);
   assert.match(skillSource, /If a page range would exceed the maximum wait time, split the range/i);
