@@ -144,10 +144,41 @@ Subagent split rules:
 - 2-6 pages: MUST dispatch one subagent per page.
 - 7+ pages: MUST dispatch 3-6 subagents, each assigned a consecutive page range.
 - Default wait budget MUST be at least 2 minutes per image plus buffer.
-- Image workers MUST use low or medium reasoning unless the user explicitly asks otherwise.
-- Each worker input MUST be the assigned page protocol slice plus relevant reference assets only.
+- Image workers MUST use `reasoning_effort: "low"` unless the user explicitly asks for deeper reasoning.
+- Before spawning workers, the leader MUST create one shared deck generation context from the confirmed protocol: deck title, audience, aspect ratio, global style, palette, typography, logo/template asset ids, page list, global negative rules, QA acceptance rules, and asset index.
+- Every worker MUST receive the exact same shared deck generation context plus only its assigned page protocol slice and relevant reference asset paths.
+- MUST NOT rely on inherited chat history as the only consistency mechanism.
+- MUST NOT call `spawn_agent` with `fork_context: true` when also setting `agent_type` / role.
+- Consistency-first spawn shape is: omit `agent_type`, set `fork_context: true`, set `reasoning_effort: "low"`, and still include the shared deck generation context in the worker prompt.
+- Context-packet spawn shape is: omit `agent_type`, set `fork_context: false` or omit it, set `reasoning_effort: "low"`, and put the shared deck generation context plus assigned page context in the worker prompt.
+- If a role is required by the runtime, MUST omit `fork_context`; write the shared deck generation context and complete task context into `message` or `items`.
 - If subagent spawning is unavailable, blocked, or fails, the leader MAY fall back to direct generation, but MUST record the reason in `imagegen-jobs.json` notes or the final handoff. Silent fallback is FORBIDDEN.
 - The leader MUST wait for subagent results or failure status before creating `png-manifest.json`.
+
+Spawn call guardrail:
+
+```text
+Allowed:
+spawn_agent({
+  reasoning_effort: "low",
+  fork_context: true,
+  message: "<worker prompt with shared deck generation context, assigned page protocol slice, and reference paths>"
+})
+
+Also allowed:
+spawn_agent({
+  reasoning_effort: "low",
+  fork_context: false,
+  message: "<worker prompt with shared deck generation context, assigned page protocol slice, and reference paths>"
+})
+
+Forbidden:
+spawn_agent({
+  agent_type: "<any role>",
+  fork_context: true,
+  ...
+})
+```
 
 Worker prompt template:
 
@@ -159,6 +190,20 @@ Scope:
 - Do not redesign the deck.
 - Do not change the outline.
 - Do not create PPTX, SVG, HTML, markdown, placeholder art, or prompt-only artifacts.
+- Follow the shared deck generation context exactly so pages are visually consistent with other workers.
+
+Shared deck generation context:
+- Deck title: <title>
+- Audience: <audience>
+- Aspect ratio and size: <16:9 / width x height>
+- Global style: <style description>
+- Palette: <colors>
+- Typography: <fonts and text style>
+- Logos/template assets: <ids and paths>
+- Full page list: <page numbers and titles/claims>
+- Global negative rules: <rules shared by all pages>
+- QA acceptance rules: <one full-slide PNG, all text inside image, no placeholder, no PPT overlay>
+- Asset index: <stable ids, captions, usage, localized paths>
 
 For each assigned page:
 - Page: <page-number>

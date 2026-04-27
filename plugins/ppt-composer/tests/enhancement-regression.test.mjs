@@ -203,6 +203,14 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(skillSource, /For multi-page decks, MUST dispatch bounded image-generation subagents/i);
   assert.match(skillSource, /2-6 pages: MUST dispatch one subagent per page/i);
   assert.match(skillSource, /7\+ pages: MUST dispatch 3-6 subagents/i);
+  assert.match(skillSource, /reasoning_effort: "low"/i);
+  assert.match(skillSource, /leader MUST create one shared deck generation context/i);
+  assert.match(skillSource, /Every worker MUST receive the exact same shared deck generation context/i);
+  assert.match(skillSource, /MUST NOT rely on inherited chat history as the only consistency mechanism/i);
+  assert.match(skillSource, /MUST NOT call `spawn_agent` with `fork_context: true` when also setting `agent_type`/i);
+  assert.match(skillSource, /Consistency-first spawn shape is: omit `agent_type`, set `fork_context: true`/i);
+  assert.match(skillSource, /Context-packet spawn shape is: omit `agent_type`, set `fork_context: false`/i);
+  assert.match(skillSource, /Shared deck generation context:/i);
   assert.match(skillSource, /Silent fallback is FORBIDDEN/i);
   assert.match(skillSource, /MUST wait for subagent results or failure status before creating `png-manifest\.json`/i);
   assert.match(skillSource, /assigned page protocol slice/i);
