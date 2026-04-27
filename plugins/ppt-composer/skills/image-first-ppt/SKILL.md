@@ -138,20 +138,37 @@ Primary path: Codex built-in image generation via the installed `imagegen` skill
 - `generate-assets --provider openai` is an explicit API fallback.
 - If imagegen workers fail or return prompt-only output, retry or generate directly. MUST NOT assemble placeholders.
 
-Subagent split rules:
+Leader must split work as follows:
 
 - 1 page: the leader may generate directly.
 - 2-6 pages: MUST dispatch one subagent per page.
-- 7+ pages: MUST dispatch 3-6 subagents, each assigned a consecutive page range.
-- Default wait budget MUST be at least 2 minutes per image plus buffer.
-- Image workers MUST use `reasoning_effort: "low"` unless the user explicitly asks for deeper reasoning.
+- 7+ pages: MUST dispatch 3-6 concurrent subagents, each assigned a consecutive page range.
+- Each page still requires an independent PNG file.
+
+Subagent runtime and model rules:
+
+- Image generation is slow. Default budget is 2 minutes per image unless the user gives a different budget.
+- Estimate each subagent's runtime as `assigned_page_count * per_image_budget`.
+- Add a practical buffer when waiting for image workers. If the expected image time is 2 minutes, wait at least 3 minutes for a one-page worker; for multi-page workers, wait at least `assigned_page_count * 2 minutes + 1 minute`.
+- If a page range would exceed the maximum wait time, split the range into smaller subagent tasks.
+- Prefer more parallel one-page workers over long sequential multi-page workers when the deck has 2-6 pages.
+- For 7+ pages, keep at most 6 concurrent subagents, but size each consecutive range so the range fits inside the wait budget.
+- Image workers MUST use `reasoning_effort: "low"` unless the user explicitly asks for deeper reasoning. The worker is executing a fixed image prompt, not planning the deck.
+- The leader may use stronger reasoning for planning, but worker prompts MUST stay narrow and execution-focused.
+
+Shared context rules:
+
 - Before spawning workers, the leader MUST create one shared deck generation context from the confirmed protocol: deck title, audience, aspect ratio, global style, palette, typography, logo/template asset ids, page list, global negative rules, QA acceptance rules, and asset index.
 - Every worker MUST receive the exact same shared deck generation context plus only its assigned page protocol slice and relevant reference asset paths.
 - MUST NOT rely on inherited chat history as the only consistency mechanism.
+- Every subagent task MUST be a hard-bounded image-generation task. Subagent output is PNG.
+
+Spawn call rules:
+
 - MUST NOT call `spawn_agent` with `fork_context: true` when also setting `agent_type` / role.
-- Consistency-first spawn shape is: omit `agent_type`, set `fork_context: true`, set `reasoning_effort: "low"`, and still include the shared deck generation context in the worker prompt.
-- Context-packet spawn shape is: omit `agent_type`, set `fork_context: false` or omit it, set `reasoning_effort: "low"`, and put the shared deck generation context plus assigned page context in the worker prompt.
-- If a role is required by the runtime, MUST omit `fork_context`; write the shared deck generation context and complete task context into `message` or `items`.
+- Preferred consistency-first shape is: omit `agent_type`, set `fork_context: true`, set `reasoning_effort: "low"`, and still include the shared deck generation context in the worker prompt.
+- If role-less forked spawn fails, or if a role is required by the runtime, MUST omit `fork_context`; write the shared deck generation context and complete task context into `message` or `items`.
+- Context-packet fallback shape is: set `fork_context: false` or omit it, set `reasoning_effort: "low"`, and put the shared deck generation context plus assigned page context in the worker prompt.
 - If subagent spawning is unavailable, blocked, or fails, the leader MAY fall back to direct generation, but MUST record the reason in `imagegen-jobs.json` notes or the final handoff. Silent fallback is FORBIDDEN.
 - The leader MUST wait for subagent results or failure status before creating `png-manifest.json`.
 
@@ -172,6 +189,13 @@ spawn_agent({
   message: "<worker prompt with shared deck generation context, assigned page protocol slice, and reference paths>"
 })
 
+Also allowed when a role is unavoidable:
+spawn_agent({
+  agent_type: "<role>",
+  reasoning_effort: "low",
+  message: "<worker prompt with shared deck generation context, assigned page protocol slice, and reference paths>"
+})
+
 Forbidden:
 spawn_agent({
   agent_type: "<any role>",
@@ -189,8 +213,10 @@ Scope:
 - Generate only the assigned page(s).
 - Do not redesign the deck.
 - Do not change the outline.
+- Do not edit prompts for other pages.
 - Do not create PPTX, SVG, HTML, markdown, placeholder art, or prompt-only artifacts.
 - Follow the shared deck generation context exactly so pages are visually consistent with other workers.
+- Use low reasoning only; focus on direct image generation, not analysis.
 
 Shared deck generation context:
 - Deck title: <title>
@@ -221,11 +247,26 @@ For each assigned page:
 
 Required behavior:
 1. Inspect/use assigned reference images and table PNGs when present.
-2. Directly call Codex built-in image generation.
-3. Return page number, generated PNG path, status, and one-line failure reason if failed.
+2. Directly call Codex built-in image generation via the installed `imagegen` skill, `$imagegen`, or `image_gen` for each assigned page.
+3. Save or return the real generated PNG artifact for each page.
+4. Stay within the assigned page budget; if generation is still running, keep working until the wait budget is reached.
+5. Return only:
+   - page number
+   - generated PNG path
+   - status: generated or failed
+   - one-line failure reason if failed.
 
-Failure: prompt-only, SVG, HTML, placeholder, local screenshot, background-only image, later PPT text overlay, or changed strict_embed evidence.
+Failure conditions:
+- Returning only a prompt is failure.
+- Returning SVG/HTML/placeholder is failure.
+- Returning an HTML/CSS/canvas/headless Chrome screenshot or local deterministic renderer PNG is failure.
+- Returning a background-only image is failure.
+- Suggesting later PPT text overlay is failure.
+- Treating missing `OPENAI_API_KEY` as proof that Codex built-in image generation is unavailable is failure.
+- In `strict_embed`, changing numbers, curves, table headers, logos, or figure captions is failure.
 ```
+
+Leader MUST NOT treat a subagent response as successful unless it includes a real generated PNG path for each assigned page.
 
 ## Manifest And QA
 
