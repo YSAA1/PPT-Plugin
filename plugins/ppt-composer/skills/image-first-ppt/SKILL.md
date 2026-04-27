@@ -68,7 +68,7 @@ If no uploaded file or explicit reference path exists, MUST NOT scan the current
 - deck metadata and style;
 - localized reference assets by id;
 - one page record per slide;
-- `content_inputs`, `reference_asset_ids`, `fidelity`, `final_image_prompt`, `negative_prompt`, and `output_png`.
+- `content_inputs`, `reference_asset_ids`, `fidelity`, `final_image_prompt`, `negative_prompt`, `output_png`, and optional `speaker_notes`.
 
 Use only these fidelity modes:
 
@@ -113,7 +113,15 @@ Each page MUST include exactly these required fields:
 - `final_image_prompt`
 - `negative_prompt`
 - `output_png`
+- optional `speaker_notes`: speaker/presenter notes written to PPT notes, not visible slide text
 - `free_generation: true` only when a reference-grounded page intentionally has no evidence binding
+
+Speaker notes rules:
+
+- Use `speaker_notes` as the canonical protocol key.
+- Accept legacy aliases `notes`, `remarks`, `presenter_notes`, and `备注` when user-authored protocols already contain them.
+- Speaker notes MUST NOT be rendered inside the PNG unless the user explicitly says they are visible slide text.
+- Assembly MUST carry speaker notes from protocol -> `imagegen-jobs.json` -> `png-manifest.json` -> PPT speaker notes.
 
 Protocol patch rules:
 
@@ -216,6 +224,7 @@ Scope:
 - Do not edit prompts for other pages.
 - Do not create PPTX, SVG, HTML, markdown, placeholder art, or prompt-only artifacts.
 - Follow the shared deck generation context exactly so pages are visually consistent with other workers.
+- Treat `speaker_notes` as presenter-only notes; do not render them as visible slide text.
 - Use low reasoning only; focus on direct image generation, not analysis.
 
 Shared deck generation context:
@@ -235,6 +244,7 @@ For each assigned page:
 - Page: <page-number>
 - Size: <width>x<height>, 16:9 unless specified otherwise
 - Output PNG path: <path>.png
+- Speaker notes: <speaker_notes; presenter-only, not visible text>
 - Fidelity: <free|light_redraw|strict_embed>
 - Protocol page slice:
   <JSON for only this page>

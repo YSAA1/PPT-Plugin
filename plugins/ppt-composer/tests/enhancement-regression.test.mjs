@@ -221,6 +221,9 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(skillSource, /Silent fallback is FORBIDDEN/i);
   assert.match(skillSource, /MUST wait for subagent results or failure status before creating `png-manifest\.json`/i);
   assert.match(skillSource, /assigned page protocol slice/i);
+  assert.match(skillSource, /optional `speaker_notes`/i);
+  assert.match(skillSource, /Speaker notes MUST NOT be rendered inside the PNG/i);
+  assert.match(skillSource, /protocol -> `imagegen-jobs\.json` -> `png-manifest\.json` -> PPT speaker notes/i);
   assert.match(skillSource, /Directly call Codex built-in image generation/i);
   assert.match(skillSource, /missing `OPENAI_API_KEY` does not mean built-in `image_gen` is unavailable/i);
   assert.match(skillSource, /generate-assets --provider codex.*prompt-sheet handoff/i);
@@ -632,6 +635,9 @@ test('imagegen jobs gate manifest creation and visual QA blocks bad PNGs', async
       negative_prompt: 'No watermark.',
       output_png: `dist/slides/slide-${String(index + 1).padStart(2, '0')}.png`,
       free_generation: true,
+      ...(index === 0 ? { speaker_notes: 'Presenter note for page one.' } : {}),
+      ...(index === 1 ? { notes: ['Alias note line one.', 'Alias note line two.'] } : {}),
+      ...(index === 2 ? { 备注: '中文备注会写入 PPT notes。' } : {}),
     })),
   };
   await writeFile(protocolPath, `${JSON.stringify(protocol, null, 2)}\n`);
@@ -639,6 +645,10 @@ test('imagegen jobs gate manifest creation and visual QA blocks bad PNGs', async
   const createResult = await runCli(['imagegen-jobs-create', '--protocol', protocolPath, '--out', jobsPath]);
   assert.equal(createResult.summary.total, 20);
   assert.equal(createResult.summary.pending, 20);
+  const jobsAfterCreate = JSON.parse(await readFile(jobsPath, 'utf8'));
+  assert.equal(jobsAfterCreate.pages[0].speaker_notes, 'Presenter note for page one.');
+  assert.equal(jobsAfterCreate.pages[1].speaker_notes, 'Alias note line one.\nAlias note line two.');
+  assert.equal(jobsAfterCreate.pages[2].speaker_notes, '中文备注会写入 PPT notes。');
 
   const firstPng = path.join(outDir, 'slide-01.png');
   await writeSlidePng(firstPng);
@@ -660,6 +670,17 @@ test('imagegen jobs gate manifest creation and visual QA blocks bad PNGs', async
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
   assert.equal(manifest.items.length, 20);
   assert.ok(manifest.items.every((item) => item.status === 'generated' && item.path.endsWith('.png')));
+  assert.equal(manifest.items[0].speaker_notes, 'Presenter note for page one.');
+  assert.equal(manifest.items[1].speaker_notes, 'Alias note line one.\nAlias note line two.');
+  assert.equal(manifest.items[2].speaker_notes, '中文备注会写入 PPT notes。');
+
+  const deckPath = path.join(outDir, 'notes-demo.pptx');
+  const specPath = path.join(outDir, 'notes-demo.spec.json');
+  await runCli(['assemble-image-ppt', '--manifest', manifestPath, '--out', deckPath, '--spec-out', specPath]);
+  const imageFirstSpec = JSON.parse(await readFile(specPath, 'utf8'));
+  assert.equal(imageFirstSpec.slides[0].notes, 'Presenter note for page one.');
+  assert.equal(imageFirstSpec.slides[1].notes, 'Alias note line one.\nAlias note line two.');
+  assert.equal(imageFirstSpec.slides[2].notes, '中文备注会写入 PPT notes。');
 
   const qaResult = await runCli(['visual-qa', '--protocol', protocolPath, '--jobs', jobsPath, '--out', qaPath]);
   assert.equal(qaResult.status, 'pass');

@@ -68,6 +68,7 @@ ppt-composer:image-first-ppt
 - 每页标题和核心观点；
 - 每页绑定的证据；
 - 每页最终生图 prompt；
+- 可选的演讲者备注；
 - 每页输出 PNG 路径。
 
 页面通过 asset id 引用资料：
@@ -94,6 +95,7 @@ ppt-composer:image-first-ppt
       },
       "reference_asset_ids": ["fig-1"],
       "fidelity": "strict_embed",
+      "speaker_notes": "讲解迁移结果，并强调 heavy-load 条件。",
       "output_png": "dist/slides/slide-03.png"
     }
   ]
@@ -101,6 +103,7 @@ ppt-composer:image-first-ppt
 ```
 
 不要把原始图片路径直接写进 `content_inputs`。真实文件路径应该放在 `assets`，页面里只引用对应的 asset id。
+使用 `speaker_notes` 写演讲者备注；它会进入 PowerPoint 备注页，不会渲染成页面可见文字。已有协议里的 `notes`、`remarks`、`presenter_notes` 或 `备注` 会作为兼容别名读取。
 
 PPT Composer 会把协议修改和生成状态保存在内部文件里：
 
