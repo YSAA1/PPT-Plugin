@@ -1,9 +1,16 @@
 import { copyFile, mkdir, readdir, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { exists } from "./lib.mjs";
 
-const DEFAULT_WRAPPER = "/home/ssy/.codex/skills/mineru-pdf-to-md/scripts/run_mineru.sh";
+const DEFAULT_WRAPPER = path.join(
+  process.env.CODEX_HOME || path.join(homedir(), ".codex"),
+  "skills",
+  "mineru-pdf-to-md",
+  "scripts",
+  process.platform === "win32" ? "run_mineru.cmd" : "run_mineru.sh",
+);
 
 export async function parsePaper({ inputPath, outDir, lang = "en", mode = "auto", mineruWrapper, dryRun = false }) {
   if (!(await exists(inputPath))) {
@@ -80,7 +87,7 @@ async function walk(dir) {
 
 function run(command, args) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: "inherit" });
+    const child = spawn(command, args, { stdio: "inherit", windowsHide: true });
     child.on("error", reject);
     child.on("exit", (code) => {
       if (code === 0) resolve();

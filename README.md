@@ -48,8 +48,11 @@ ppt-composer:image-first-ppt
 ```text
 brief and references
   -> deck-protocol.json
-  -> user review
-  -> one PNG per slide
+  -> protocol patch tools
+  -> localized asset index
+  -> imagegen job manifest
+  -> visual QA
+  -> complete PNG manifest
   -> PPTX
 ```
 
@@ -98,6 +101,45 @@ Pages reference assets by id:
 ```
 
 Do not put raw image paths in `content_inputs`. Put files in `assets`, then reference their ids from pages.
+
+PPT Composer keeps protocol edits and generation state in internal files:
+
+| File | Purpose |
+| --- | --- |
+| `reference-assets/asset-index.json` | Localized reference files and URLs with stable ids, hash, MIME, size, caption, and usage. |
+| `imagegen-jobs.json` | Per-page generation state. `deck-protocol.json` remains the content source of truth. |
+| `visual-qa.json` | Deterministic PNG checks before assembly. Failures block assembly unless a manual override note is recorded. |
+| `png-manifest.json` | Final assembly gate. It exists only after every planned page has a real generated PNG. |
+
+### Revising The Protocol
+
+You normally revise the protocol by telling Codex what to change in plain language. You do not need to memorize CLI commands.
+
+Example user requests:
+
+```text
+Change page 6 to strict_embed and bind it to fig-3.
+```
+
+```text
+Rename page 3 to "Core Experiment Result" and make the claim focus on sample efficiency.
+```
+
+```text
+Use logo-1 on every page, but keep page 2 free_generation.
+```
+
+Codex converts those requests into validated protocol patch operations. Internally it uses tools such as:
+
+```bash
+ppt-composer protocol-bind-asset --protocol output/deck-protocol.json --page 6 --asset-id fig-3
+ppt-composer protocol-set-fidelity --protocol output/deck-protocol.json --page 6 --fidelity strict_embed
+ppt-composer protocol-update-page --protocol output/deck-protocol.json --page 3 --patch '{"title":"Core Experiment Result"}'
+```
+
+Each patch is checked before it is saved. The tool rejects unknown pages, unknown asset ids, duplicate asset ids, and illegal fidelity values. It also pretty-prints `deck-protocol.json`, keeps the protocol valid, and records an `audit_log`.
+
+Manual JSON editing is possible, but the recommended workflow is: describe the revision to Codex, let Codex patch the protocol, then review the updated protocol summary before image generation.
 
 ### Fidelity Modes
 
@@ -167,6 +209,8 @@ Open `PPT Composer` and select `Install plugin`.
 
 PPT Composer bundles its skill and MCP server configuration as a Codex plugin. On first MCP startup, the Node MCP wrapper installs runtime npm dependencies inside the installed plugin cache if they are missing.
 
+The MCP startup wrappers are cross-platform Node scripts. On Windows they call `npm.cmd` / `uvx.cmd` and the plugin parses DOCX/PPTX with JSZip instead of requiring a system `unzip` command.
+
 Plugin manifest:
 
 ```text
@@ -181,13 +225,48 @@ plugins/ppt-composer/.mcp.json
 
 ## Optional Environment
 
+Environment variables are optional. They are only needed for higher-quality MinerU parsing or an explicit OpenAI Images API fallback.
+
+Supported configuration methods, from highest to lowest priority:
+
+1. System or shell environment variables inherited by Codex.
+2. A custom env file pointed to by `PPT_COMPOSER_ENV_FILE`.
+3. `.env` in the local repository root, useful when developing from a clone.
+4. `plugins/ppt-composer/.env`, useful inside the plugin package or installed plugin cache.
+
+Existing system or shell variables are never overwritten by `.env` files.
+
+Linux/macOS shell example:
+
+```bash
+export MINERU_API_TOKEN="..."
+export OPENAI_API_KEY="..."
+```
+
+Windows PowerShell example:
+
+```powershell
+$env:MINERU_API_TOKEN="..."
+$env:OPENAI_API_KEY="..."
+```
+
+Plugin-local `.env` example:
+
 ```bash
 cp plugins/ppt-composer/.env.example plugins/ppt-composer/.env
 ```
 
+Then edit the new `.env` file:
+
 ```bash
-MINERU_API_TOKEN=
-OPENAI_API_KEY=
+MINERU_API_TOKEN=...
+OPENAI_API_KEY=...
+```
+
+To keep secrets outside the repository, point the plugin at a private env file:
+
+```bash
+export PPT_COMPOSER_ENV_FILE="$HOME/.config/ppt-composer/env"
 ```
 
 Notes:
@@ -195,7 +274,6 @@ Notes:
 - `MINERU_API_TOKEN` enables MinerU Precision parsing.
 - `OPENAI_API_KEY` is only needed for an explicit OpenAI Images API fallback.
 - Codex built-in `$imagegen` does not require a local `OPENAI_API_KEY`.
-- Never commit `.env`, real tokens, or private wrappers.
 
 ## Usage
 
@@ -214,9 +292,12 @@ Expected flow:
 1. Codex asks for missing requirements.
 2. References are parsed.
 3. `deck-protocol.json` is created.
-4. You confirm or edit the protocol.
-5. Codex generates one PNG per page.
-6. The PPTX is assembled after all PNGs exist.
+4. You review the protocol and ask for revisions in plain language if needed.
+5. Codex applies validated protocol patches and shows the updated plan.
+6. You explicitly confirm the protocol.
+7. Codex generates one PNG per page.
+8. Visual QA runs and a complete PNG manifest is created.
+9. The PPTX is assembled after all PNGs exist.
 
 ## Quality Rules
 

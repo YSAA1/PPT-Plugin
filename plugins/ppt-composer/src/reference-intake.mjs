@@ -1,13 +1,12 @@
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { deflateSync } from "node:zlib";
 import { parsePaper } from "./paper-parse.mjs";
 import { createDeckProtocol } from "./deck-protocol.mjs";
 import { ensureParent, exists, slugify } from "./lib.mjs";
+import { writeAssetIndexForProtocolAssets } from "./asset-index.mjs";
+import { listZipEntries, readZipBuffer, readZipText } from "./zip-utils.mjs";
 
-const execFileAsync = promisify(execFile);
 const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
 const MARKDOWN_EXTS = new Set([".md", ".markdown"]);
 const TEXT_EXTS = new Set([".txt"]);
@@ -83,15 +82,19 @@ export async function referenceIntake({
     await ensureParent(protocolPath);
     await writeFile(protocolPath, `${JSON.stringify(protocol, null, 2)}\n`, "utf8");
   }
+  const assetIndexPath = path.join(assetDir, "asset-index.json");
+  const assetIndex = await writeAssetIndexForProtocolAssets({ assets, assetDir, indexPath: assetIndexPath });
 
   return {
     protocol,
     protocolPath,
     outDir: resolvedOutDir,
     assetDir,
+    assetIndexPath,
+    indexedAssets: assetIndex.assets.length,
     assets: assets.length,
     pages: protocol.pages.length,
-    warnings,
+    warnings: [...warnings, ...(assetIndex.warnings || [])],
   };
 }
 
@@ -180,8 +183,8 @@ async function ingestDocx({ inputPath, assetDir, assets, warnings }) {
   for (const zipName of fileList.filter((entry) => /^word\/media\//.test(entry))) {
     const id = nextId(assets, "fig");
     const dest = path.join(assetDir, `${id}${path.extname(zipName).toLowerCase() || ".bin"}`);
-    const { stdout } = await execFileAsync("unzip", ["-p", inputPath, zipName], { encoding: "buffer", maxBuffer: 50 * 1024 * 1024 });
-    await writeFile(dest, stdout);
+    const buffer = await unzipReadBuffer(inputPath, zipName);
+    await writeFile(dest, buffer);
     assets.push({
       id,
       type: "source_image",
@@ -342,19 +345,25 @@ function extractDocxTables(xml) {
 
 async function unzipList(zipPath) {
   try {
-    const { stdout } = await execFileAsync("unzip", ["-Z1", zipPath], { maxBuffer: 20 * 1024 * 1024 });
-    return stdout.split(/\r?\n/).filter(Boolean);
+    return await listZipEntries(zipPath);
   } catch (error) {
-    throw new Error(`Unable to inspect DOCX zip entries with unzip: ${error.message}`);
+    throw new Error(`Unable to inspect DOCX zip entries: ${error.message}`);
   }
 }
 
 async function unzipReadText(zipPath, entry) {
   try {
-    const { stdout } = await execFileAsync("unzip", ["-p", zipPath, entry], { maxBuffer: 20 * 1024 * 1024 });
-    return stdout;
+    return await readZipText(zipPath, entry);
   } catch (error) {
-    throw new Error(`Unable to read ${entry} from DOCX with unzip: ${error.message}`);
+    throw new Error(`Unable to read ${entry} from DOCX: ${error.message}`);
+  }
+}
+
+async function unzipReadBuffer(zipPath, entry) {
+  try {
+    return await readZipBuffer(zipPath, entry);
+  } catch (error) {
+    throw new Error(`Unable to read ${entry} from DOCX: ${error.message}`);
   }
 }
 

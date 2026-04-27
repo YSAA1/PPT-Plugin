@@ -1,9 +1,6 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import path from "node:path";
 import { exists, stripXml } from "./lib.mjs";
-
-const execFileAsync = promisify(execFile);
+import { listZipEntries, readZipText } from "./zip-utils.mjs";
 
 export async function runQa({ pptxPath, spec, specPath }) {
   if (!(await exists(pptxPath))) {
@@ -152,11 +149,9 @@ function isFullSlideImage(object, asset) {
 }
 
 async function unzipList(pptxPath) {
-  const { stdout } = await execFileAsync("unzip", ["-Z1", pptxPath], { maxBuffer: 20 * 1024 * 1024 });
-  return stdout.split(/\r?\n/).filter(Boolean);
+  return listZipEntries(pptxPath);
 }
 
 async function unzipRead(pptxPath, entry) {
-  const { stdout } = await execFileAsync("unzip", ["-p", pptxPath, entry], { maxBuffer: 20 * 1024 * 1024 });
-  return stdout;
+  return readZipText(pptxPath, entry);
 }

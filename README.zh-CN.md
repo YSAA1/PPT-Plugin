@@ -48,8 +48,11 @@ ppt-composer:image-first-ppt
 ```text
 需求和参考资料
   -> deck-protocol.json
-  -> 用户确认或修改
-  -> 每页生成一张 PNG
+  -> 协议补丁工具
+  -> 本地资产索引
+  -> 生图任务清单
+  -> 视觉 QA
+  -> 完整 PNG manifest
   -> PPTX
 ```
 
@@ -98,6 +101,45 @@ ppt-composer:image-first-ppt
 ```
 
 不要把原始图片路径直接写进 `content_inputs`。真实文件路径应该放在 `assets`，页面里只引用对应的 asset id。
+
+PPT Composer 会把协议修改和生成状态保存在内部文件里：
+
+| 文件 | 用途 |
+| --- | --- |
+| `reference-assets/asset-index.json` | 本地化后的参考文件和 URL，包含稳定 id、hash、MIME、大小、说明和用途。 |
+| `imagegen-jobs.json` | 每页生图任务状态；`deck-protocol.json` 仍然是内容真相。 |
+| `visual-qa.json` | 组装前的确定性 PNG 检查；失败会阻断组装，除非写入人工 override note。 |
+| `png-manifest.json` | 最终组装门禁；只有每页都有真实生成 PNG 后才创建。 |
+
+### 如何修改协议
+
+正常使用时，你用自然语言告诉 Codex 想改什么，不需要自己记 CLI 参数。
+
+例如你可以说：
+
+```text
+第 6 页改成 strict_embed，并绑定 fig-3。
+```
+
+```text
+第 3 页标题改成“核心实验结果”，claim 聚焦 sample efficiency。
+```
+
+```text
+每页都使用 logo-1，但第 2 页保持 free_generation。
+```
+
+Codex 会把这些自然语言修改转换成可验证的协议补丁操作。内部会调用类似这样的工具：
+
+```bash
+ppt-composer protocol-bind-asset --protocol output/deck-protocol.json --page 6 --asset-id fig-3
+ppt-composer protocol-set-fidelity --protocol output/deck-protocol.json --page 6 --fidelity strict_embed
+ppt-composer protocol-update-page --protocol output/deck-protocol.json --page 3 --patch '{"title":"核心实验结果"}'
+```
+
+每次 patch 保存前都会校验。工具会拒绝不存在的页码、不存在的 asset id、重复 asset id、非法 fidelity，并自动格式化 `deck-protocol.json`，保持协议有效，同时写入 `audit_log`。
+
+你也可以直接手改 JSON，但推荐流程是：用自然语言描述修改，让 Codex 调用协议补丁工具修改，然后再看更新后的协议摘要。确认后才开始生图。
 
 ### 保真模式
 
@@ -167,6 +209,8 @@ codex plugin marketplace add .
 
 PPT Composer 会把 skill 和 MCP server 配置一起打包成 Codex 插件。第一次启动 MCP 时，如果安装后的插件 cache 里缺少 Node 运行依赖，内置启动器会自动在该 cache 目录内安装依赖。
 
+MCP 启动器是跨平台 Node 脚本。在 Windows 上会调用 `npm.cmd` / `uvx.cmd`，并且插件使用 JSZip 解析 DOCX/PPTX，不依赖系统自带 `unzip` 命令。
+
 插件入口文件：
 
 ```text
@@ -181,13 +225,48 @@ plugins/ppt-composer/.mcp.json
 
 ## 可选环境变量
 
+环境变量是可选的，只在需要更高质量的 MinerU 解析，或显式使用 OpenAI Images API fallback 时才需要。
+
+支持这些配置方式，优先级从高到低：
+
+1. Codex 启动时继承的系统环境变量或 shell 环境变量。
+2. `PPT_COMPOSER_ENV_FILE` 指向的自定义 env 文件。
+3. 本地 clone 仓库根目录的 `.env`，适合开发调试。
+4. `plugins/ppt-composer/.env`，适合插件包或已安装插件 cache 内使用。
+
+已经存在的系统或 shell 环境变量不会被 `.env` 文件覆盖。
+
+Linux/macOS shell 示例：
+
+```bash
+export MINERU_API_TOKEN="..."
+export OPENAI_API_KEY="..."
+```
+
+Windows PowerShell 示例：
+
+```powershell
+$env:MINERU_API_TOKEN="..."
+$env:OPENAI_API_KEY="..."
+```
+
+插件目录 `.env` 示例：
+
 ```bash
 cp plugins/ppt-composer/.env.example plugins/ppt-composer/.env
 ```
 
+然后编辑新建的 `.env` 文件：
+
 ```bash
-MINERU_API_TOKEN=
-OPENAI_API_KEY=
+MINERU_API_TOKEN=...
+OPENAI_API_KEY=...
+```
+
+如果你不想把私密 env 文件放进仓库，可以指定私有文件路径：
+
+```bash
+export PPT_COMPOSER_ENV_FILE="$HOME/.config/ppt-composer/env"
 ```
 
 说明：
@@ -195,7 +274,6 @@ OPENAI_API_KEY=
 - `MINERU_API_TOKEN` 用于 MinerU 精准解析。
 - `OPENAI_API_KEY` 只用于显式选择 OpenAI Images API fallback。
 - Codex 内置 `$imagegen` 不依赖本地 `OPENAI_API_KEY`。
-- 不要提交 `.env` 或任何真实 token。
 
 ## 使用方式
 
@@ -214,9 +292,12 @@ OPENAI_API_KEY=
 1. Codex 询问缺失信息。
 2. 解析参考资料。
 3. 生成 `deck-protocol.json`。
-4. 你确认或修改协议。
-5. Codex 按页生成 PNG。
-6. PNG 齐全后组装 PPTX。
+4. 你审阅协议，需要修改时直接用自然语言提出。
+5. Codex 用协议补丁工具修改并展示更新后的计划。
+6. 你明确确认协议。
+7. Codex 按页生成 PNG。
+8. 运行视觉 QA，并生成完整 PNG manifest。
+9. PNG 齐全后组装 PPTX。
 
 ## 质量边界
 
