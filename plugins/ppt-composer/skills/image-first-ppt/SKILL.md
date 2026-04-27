@@ -30,6 +30,8 @@ Execute in this exact order. Do not skip forward.
 4. Patch revisions only through protocol patch tools when possible.
 5. Present the protocol summary and wait for explicit confirmation. This is the Protocol Confirmation Gate.
 6. After confirmation, generate final full-slide PNGs directly with Codex image generation. Treat confirmation as authorization to use bounded image-generation subagents for the confirmed pages.
+   - For multi-page decks, MUST dispatch bounded image-generation subagents before generating directly in the leader.
+   - The leader MUST NOT silently do all confirmed pages alone unless subagent spawning is unavailable or has already failed.
 7. Track page status in `imagegen-jobs.json`.
 8. Run `visual-qa`.
 9. Create `png-manifest.json` only from complete accepted/generated jobs.
@@ -138,11 +140,14 @@ Primary path: Codex built-in image generation via the installed `imagegen` skill
 
 Subagent split rules:
 
-- 1-6 pages: use at most one subagent per page.
-- 7+ pages: use at most 6 subagents, each assigned a consecutive page range.
+- 1 page: the leader may generate directly.
+- 2-6 pages: MUST dispatch one subagent per page.
+- 7+ pages: MUST dispatch 3-6 subagents, each assigned a consecutive page range.
 - Default wait budget MUST be at least 2 minutes per image plus buffer.
 - Image workers MUST use low or medium reasoning unless the user explicitly asks otherwise.
 - Each worker input MUST be the assigned page protocol slice plus relevant reference assets only.
+- If subagent spawning is unavailable, blocked, or fails, the leader MAY fall back to direct generation, but MUST record the reason in `imagegen-jobs.json` notes or the final handoff. Silent fallback is FORBIDDEN.
+- The leader MUST wait for subagent results or failure status before creating `png-manifest.json`.
 
 Worker prompt template:
 

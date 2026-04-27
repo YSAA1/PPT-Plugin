@@ -200,6 +200,11 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(skillSource, /deck-protocol\.json/i);
   assert.match(skillSource, /Protocol Confirmation Gate/i);
   assert.match(skillSource, /confirmation as authorization to use bounded image-generation subagents/i);
+  assert.match(skillSource, /For multi-page decks, MUST dispatch bounded image-generation subagents/i);
+  assert.match(skillSource, /2-6 pages: MUST dispatch one subagent per page/i);
+  assert.match(skillSource, /7\+ pages: MUST dispatch 3-6 subagents/i);
+  assert.match(skillSource, /Silent fallback is FORBIDDEN/i);
+  assert.match(skillSource, /MUST wait for subagent results or failure status before creating `png-manifest\.json`/i);
   assert.match(skillSource, /assigned page protocol slice/i);
   assert.match(skillSource, /Directly call Codex built-in image generation/i);
   assert.match(skillSource, /missing `OPENAI_API_KEY` does not mean built-in `image_gen` is unavailable/i);
