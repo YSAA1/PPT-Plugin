@@ -235,6 +235,11 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(skillSource, /asset-index-create/i);
   assert.match(skillSource, /imagegen-jobs-create/i);
   assert.match(skillSource, /visual-qa/i);
+  assert.match(skillSource, /Visual review prompt template/i);
+  assert.match(skillSource, /consistency: Does this PNG match the confirmed deck visual system/i);
+  assert.match(skillSource, /protocol_alignment: Does this PNG follow the page claim/i);
+  assert.match(skillSource, /basic_image_quality: Are there obvious generated-image defects/i);
+  assert.match(skillSource, /The leader owns deterministic QA, manifest gating/i);
   assert.match(skillSource, /pptx_reference_intake/i);
   assert.match(skillSource, /parse_paper_local/i);
   assert.match(skillSource, /assemble_image_ppt/i);
@@ -412,6 +417,8 @@ test('CLI help advertises enhancement commands', async () => {
     'imagegen-jobs-create',
     'imagegen-jobs-status',
     'imagegen-jobs-backfill',
+    'imagegen-jobs-review',
+    'imagegen-jobs-revise',
     'imagegen-jobs-to-manifest',
     'visual-qa',
     'pptx-reference-intake',
@@ -437,6 +444,8 @@ test('MCP server registers enhancement tools', async () => {
     'imagegen_jobs_create',
     'imagegen_jobs_status',
     'imagegen_jobs_backfill',
+    'imagegen_jobs_review',
+    'imagegen_jobs_revise',
     'imagegen_jobs_to_manifest',
     'visual_qa',
     'pptx_reference_intake',
@@ -695,6 +704,175 @@ test('imagegen jobs gate manifest creation and visual QA blocks bad PNGs', async
     runCli(['visual-qa', '--protocol', protocolPath, '--jobs', badJobsPath, '--out', path.join(outDir, 'bad-qa.json')]),
     /tiny_png/,
   );
+});
+
+test('imagegen visual review gates accepted pages and preserves superseded attempts', async () => {
+  const outDir = await mkdtemp(path.join(tmpdir(), 'ppt-composer-visual-review-'));
+  const protocolPath = path.join(outDir, 'deck-protocol.json');
+  const jobsPath = path.join(outDir, 'imagegen-jobs.json');
+  const manifestPath = path.join(outDir, 'png-manifest.json');
+  const qaPath = path.join(outDir, 'visual-qa.json');
+  const protocol = {
+    kind: 'ppt-composer-deck-protocol',
+    version: '0.1',
+    mode: 'brief_mode',
+    deck: { title: 'Visual Review Demo', language: 'zh', audience: 'team', page_count: 2, aspect_ratio: '16:9' },
+    style: { description: 'consistent research consulting deck', template_image_ids: [], logo_ids: [], palette: [], typography: '' },
+    assets: [],
+    pages: [1, 2].map((page) => ({
+      page,
+      title: `Page ${page}`,
+      claim: `Claim ${page}`,
+      content_inputs: { text: [], tables: [], images: [] },
+      reference_asset_ids: [],
+      fidelity: 'free',
+      final_image_prompt: `Create page ${page} with visible title and claim.`,
+      negative_prompt: 'No watermark, no unreadable text.',
+      output_png: `slides/slide-${String(page).padStart(2, '0')}.png`,
+      free_generation: true,
+    })),
+  };
+  await writeFile(protocolPath, `${JSON.stringify(protocol, null, 2)}\n`);
+  await runCli(['imagegen-jobs-create', '--protocol', protocolPath, '--out', jobsPath]);
+
+  const pageOnePng = path.join(outDir, 'slide-01.png');
+  const pageTwoFirstPng = path.join(outDir, 'slide-02-first.png');
+  await writeSlidePng(pageOnePng);
+  await writeSlidePng(pageTwoFirstPng);
+  await runCli(['imagegen-jobs-backfill', '--jobs', jobsPath, '--page', '1', '--png', pageOnePng]);
+  await runCli(['imagegen-jobs-backfill', '--jobs', jobsPath, '--page', '2', '--png', pageTwoFirstPng]);
+
+  const needsReview = await runCli(['imagegen-jobs-review', '--jobs', jobsPath, '--page', '1', '--note', 'Ready for visual review.']);
+  assert.equal(needsReview.status, 'needs_review');
+  assert.equal(needsReview.summary.needsReview, 1);
+  assert.equal(needsReview.summary.visualReviewEnabled, true);
+  await assert.rejects(
+    runCli(['imagegen-jobs-to-manifest', '--jobs', jobsPath, '--out', manifestPath]),
+    /accepted/,
+  );
+
+  const accepted = await runCli([
+    'imagegen-jobs-review',
+    '--jobs',
+    jobsPath,
+    '--page',
+    '1',
+    '--verdict',
+    'pass',
+    '--consistency',
+    'pass',
+    '--protocol-alignment',
+    'pass',
+    '--basic-image-quality',
+    'pass',
+    '--note',
+    'Consistent with the deck and aligned with the protocol.',
+  ]);
+  assert.equal(accepted.status, 'accepted');
+  assert.equal(accepted.review.categories.protocol_alignment, 'pass');
+
+  const rejected = await runCli([
+    'imagegen-jobs-review',
+    '--jobs',
+    jobsPath,
+    '--page',
+    '2',
+    '--verdict',
+    'fail',
+    '--consistency',
+    'fail',
+    '--protocol-alignment',
+    'fail',
+    '--basic-image-quality',
+    'warn',
+    '--note',
+    'Style is inconsistent and the slide drifts from the prompt.',
+    '--revision-suggestion',
+    'Tighten the prompt around the original claim and deck typography.',
+  ]);
+  assert.equal(rejected.status, 'rejected');
+  assert.equal(rejected.review.categories.consistency, 'fail');
+
+  await assert.rejects(
+    runCli(['visual-qa', '--protocol', protocolPath, '--jobs', jobsPath, '--out', qaPath]),
+    /visual_review_rejected/,
+  );
+  const visualFail = JSON.parse(await readFile(qaPath, 'utf8'));
+  assert.equal(visualFail.status, 'fail');
+  assert.equal(visualFail.visualReview.enabled, true);
+  assert.equal(visualFail.visualReview.pages[1].verdict, 'fail');
+  assert.match(visualFail.visualReview.pages[1].revisionSuggestion, /Tighten the prompt/);
+
+  const override = await runCli([
+    'visual-qa',
+    '--protocol',
+    protocolPath,
+    '--jobs',
+    jobsPath,
+    '--out',
+    path.join(outDir, 'visual-qa-override.json'),
+    '--manual-override-note',
+    'Reviewer accepts risk for an emergency draft.',
+  ]);
+  assert.equal(override.status, 'pass');
+  assert.equal(override.manualOverride.note, 'Reviewer accepts risk for an emergency draft.');
+
+  const revision = await runCli([
+    'imagegen-jobs-revise',
+    '--jobs',
+    jobsPath,
+    '--page',
+    '2',
+    '--note',
+    'Regenerate only page 2.',
+    '--revision-suggestion',
+    'Use the confirmed page claim and consistent visual system.',
+  ]);
+  assert.equal(revision.status, 'revision_requested');
+  assert.equal(revision.revision.superseded_path, pageTwoFirstPng);
+  await assert.rejects(
+    runCli(['imagegen-jobs-to-manifest', '--jobs', jobsPath, '--out', manifestPath]),
+    /accepted/,
+  );
+
+  const pageTwoSecondPng = path.join(outDir, 'slide-02-second.png');
+  await writeSlidePng(pageTwoSecondPng);
+  const regenerated = await runCli(['imagegen-jobs-backfill', '--jobs', jobsPath, '--page', '2', '--png', pageTwoSecondPng]);
+  assert.equal(regenerated.summary.generated, 1);
+  assert.equal(regenerated.summary.accepted, 1);
+
+  const pageTwoAccepted = await runCli([
+    'imagegen-jobs-review',
+    '--jobs',
+    jobsPath,
+    '--page',
+    '2',
+    '--verdict',
+    'pass',
+    '--note',
+    'Regenerated page now matches the protocol and deck style.',
+  ]);
+  assert.equal(pageTwoAccepted.status, 'accepted');
+
+  const reviewedJobs = JSON.parse(await readFile(jobsPath, 'utf8'));
+  assert.equal(reviewedJobs.pages[1].attempts.length, 2);
+  assert.equal(reviewedJobs.pages[1].attempts[0].status, 'superseded');
+  assert.equal(reviewedJobs.pages[1].attempts[1].status, 'accepted');
+  assert.deepEqual(reviewedJobs.pages[1].superseded_pngs, [pageTwoFirstPng]);
+  assert.equal(reviewedJobs.pages[1].accepted_png, pageTwoSecondPng);
+
+  const finalQa = await runCli(['visual-qa', '--protocol', protocolPath, '--jobs', jobsPath, '--out', path.join(outDir, 'visual-qa-final.json')]);
+  assert.equal(finalQa.status, 'pass');
+  assert.equal(finalQa.summary.visualReviewFailures, 0);
+  assert.equal(finalQa.visualReview.pages[1].acceptedPng, pageTwoSecondPng);
+  assert.deepEqual(finalQa.visualReview.pages[1].supersededPngs, [pageTwoFirstPng]);
+
+  const manifestResult = await runCli(['imagegen-jobs-to-manifest', '--jobs', jobsPath, '--out', manifestPath]);
+  assert.equal(manifestResult.summary.readyForManifest, true);
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  assert.ok(manifest.items.every((item) => item.sourceStatus === 'accepted'));
+  assert.equal(manifest.items[1].path, pageTwoSecondPng);
+  assert.equal(manifest.items[1].visual_review.verdict, 'pass');
 });
 
 test('pptx reference intake extracts media and theme without requiring LibreOffice thumbnails', async () => {

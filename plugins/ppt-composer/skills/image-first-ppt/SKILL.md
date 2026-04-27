@@ -33,10 +33,15 @@ Execute in this exact order. Do not skip forward.
    - For multi-page decks, MUST dispatch bounded image-generation subagents before generating directly in the leader.
    - The leader MUST NOT silently do all confirmed pages alone unless subagent spawning is unavailable or has already failed.
 7. Track page status in `imagegen-jobs.json`.
-8. Run `visual-qa`.
-9. Create `png-manifest.json` only from complete accepted/generated jobs.
-10. Assemble with `assemble-image-ppt` / MCP `assemble_image_ppt`.
-11. Run final `qa_pptx`.
+8. Run deterministic `visual-qa` to check whether the generated PNG files are structurally assembleable.
+9. Run the internal visual review loop for each page when image quality is in scope:
+   - Review only these dimensions: deck-level visual consistency, protocol/page-prompt alignment, and basic generated-image defects.
+   - Record `pass`, `warn`, or `fail` through `imagegen-jobs-review`; `warn` is accepted with a warning, `fail` blocks assembly.
+   - For failed pages, patch `deck-protocol.json` first when the prompt, negative prompt, layout intent, or fidelity binding must change, then run `imagegen-jobs-revise`, regenerate only that page, and backfill the new PNG.
+   - Default automatic retry budget is 2 regeneration attempts per failed page. If still failing, stop and report the exact page, reason, and suggested protocol change.
+10. Create `png-manifest.json` only from complete accepted/generated jobs. If visual review is enabled, every page MUST be `accepted`.
+11. Assemble with `assemble-image-ppt` / MCP `assemble_image_ppt`.
+12. Run final `qa_pptx`.
 
 Hard stop conditions:
 
@@ -282,7 +287,7 @@ Leader MUST NOT treat a subagent response as successful unless it includes a rea
 
 `imagegen-jobs.json` stores execution state only. MUST NOT move content truth out of `deck-protocol.json`.
 
-Create `png-manifest.json` only after all pages are `generated` or `accepted`:
+Create `png-manifest.json` only after all pages are `generated` or `accepted`. When visual review has been enabled for the job file, create the manifest only after every page is `accepted`:
 
 ```json
 {
@@ -296,7 +301,7 @@ Create `png-manifest.json` only after all pages are `generated` or `accepted`:
 Manifest requirements:
 
 - one item per planned slide;
-- every item has `status: "generated"`;
+- every item has `status: "generated"` in the manifest, with the source job status recorded separately;
 - every path points to a real `.png`;
 - no prompt sheet, SVG, HTML, screenshot of a prompt, or placeholder image.
 
@@ -311,6 +316,89 @@ Backfill rules:
 
 Run `visual-qa` before assembly. Level 1 checks file existence, PNG magic bytes, dimensions, tiny files, and one image per page. Level 2 checks placeholder markers and missing required references.
 
+Visual review state is stored in `imagegen-jobs.json`, not in the protocol. The protocol remains the source of truth for page content, prompts, reference bindings, and fidelity.
+
+Allowed page states include:
+
+- `pending`: no usable PNG yet.
+- `generated`: PNG is present and can pass the legacy non-review manifest gate.
+- `needs_review`: PNG exists and is waiting for visual review.
+- `accepted`: PNG passed visual review or was explicitly accepted.
+- `rejected`: visual review failed and the page is blocked.
+- `revision_requested`: a failed page is queued for regeneration after protocol patching.
+- `superseded`: an old attempt kept for audit after a newer page PNG replaces it.
+- `failed`: generation failed before producing a usable PNG.
+
+Visual review dimensions:
+
+- `consistency`: matches the confirmed deck style, typography, palette, and visual rhythm.
+- `protocol_alignment`: follows the page claim, content inputs, reference bindings, final image prompt, negative prompt, and fidelity mode.
+- `basic_image_quality`: avoids obvious generated-image defects such as unreadable text, broken layout, warped tables/logos, blank regions, watermarks, or background-only output.
+
+Visual review agent rules:
+
+- The leader owns deterministic QA, manifest gating, protocol patches, revision decisions, and final integration.
+- For multi-page decks, prefer a bounded `vision` or reviewer subagent for visual review so it can inspect PNGs against the confirmed protocol without taking over orchestration.
+- For a single page, or when subagents are unavailable, the leader may run the same review directly.
+- The reviewer MUST NOT redesign the deck, edit the protocol, regenerate images, assemble PPTX, or make final release claims.
+- The reviewer MUST return only per-page verdict data for the leader to record through `imagegen-jobs-review` / `imagegen-jobs-revise`.
+
+Visual review prompt template:
+
+```text
+You are the visual review specialist for an image-first PPT deck.
+
+Scope:
+- Review only the assigned generated PNG page(s).
+- Do not redesign the deck.
+- Do not edit deck-protocol.json, imagegen-jobs.json, prompts, or PPTX files.
+- Do not regenerate images.
+- Compare each PNG against the confirmed protocol and the shared deck style.
+
+Shared deck context:
+- Deck title: <title>
+- Audience: <audience>
+- Aspect ratio: <aspect_ratio>
+- Global style: <style.description>
+- Palette: <style.palette>
+- Typography: <style.typography>
+- Full page list: <page numbers, titles, claims>
+
+For each assigned page:
+- Page: <page-number>
+- PNG path: <current PNG path>
+- Protocol page slice:
+  <JSON for this page: title, claim, content_inputs, reference_asset_ids, fidelity, final_image_prompt, negative_prompt, output_png>
+- Relevant reference assets:
+  <asset ids, captions, paths, and required preservation notes>
+
+Review dimensions:
+1. consistency: Does this PNG match the confirmed deck visual system, typography, palette, density, and cross-page rhythm?
+2. protocol_alignment: Does this PNG follow the page claim, required content, reference bindings, final_image_prompt, negative_prompt, and fidelity?
+3. basic_image_quality: Are there obvious generated-image defects, unreadable text, broken layout, warped tables/logos, blank regions, watermarks, or background-only output?
+
+Return one compact JSON object:
+{
+  "pages": [
+    {
+      "page": 1,
+      "verdict": "pass|warn|fail",
+      "consistency": "pass|warn|fail",
+      "protocol_alignment": "pass|warn|fail",
+      "basic_image_quality": "pass|warn|fail",
+      "note": "short concrete reason",
+      "revision_suggestion": "only when warn/fail; describe the protocol/prompt/layout change needed"
+    }
+  ]
+}
+
+Verdict rules:
+- `pass`: consistent, protocol-aligned, and no material image defects.
+- `warn`: usable but has minor consistency/protocol/image-quality issues worth recording.
+- `fail`: must be regenerated because it drifts from protocol, breaks deck consistency, or has material image defects.
+- In `strict_embed`, changed numbers, curves, table headers, logos, or captions are `fail`.
+```
+
 ## Internal Tools
 
 Prefer MCP as the internal tool layer when available. Keep MCP as the internal tool layer, not a separate public skill surface.
@@ -319,13 +407,13 @@ Prefer MCP as the internal tool layer when available. Keep MCP as the internal t
 - `protocol_patch`
 - `asset_index_create`
 - `visual_plan`, `generate_assets`
-- `imagegen_jobs_create`, `imagegen_jobs_backfill`, `imagegen_jobs_status`, `imagegen_jobs_to_manifest`
+- `imagegen_jobs_create`, `imagegen_jobs_backfill`, `imagegen_jobs_review`, `imagegen_jobs_revise`, `imagegen_jobs_status`, `imagegen_jobs_to_manifest`
 - `visual_qa`
 - `assemble_image_ppt`, `qa_pptx`
 - `parse_paper_local`
 
 CLI equivalents live under `node plugins/ppt-composer/src/cli.mjs`.
-CLI job tools include `imagegen-jobs-create`, `imagegen-jobs-backfill`, `imagegen-jobs-status`, `imagegen-jobs-to-manifest`, `visual-qa`, and `asset-index-create`.
+CLI job tools include `imagegen-jobs-create`, `imagegen-jobs-backfill`, `imagegen-jobs-review`, `imagegen-jobs-revise`, `imagegen-jobs-status`, `imagegen-jobs-to-manifest`, `visual-qa`, and `asset-index-create`.
 
 ## Failure Conditions
 

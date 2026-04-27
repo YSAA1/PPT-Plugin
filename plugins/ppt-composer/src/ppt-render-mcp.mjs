@@ -18,7 +18,7 @@ import { referenceIntake } from "./reference-intake.mjs";
 import { validateDeckProtocolAsync } from "./deck-protocol.mjs";
 import { patchProtocolFile } from "./protocol-patch.mjs";
 import { createAssetIndex } from "./asset-index.mjs";
-import { createJobsFile, backfillJobsFile, jobsToManifestFile, summarizeJobs } from "./imagegen-jobs.mjs";
+import { createJobsFile, backfillJobsFile, reviewJobsFile, reviseJobsFile, jobsToManifestFile, summarizeJobs } from "./imagegen-jobs.mjs";
 import { runVisualQaFile } from "./visual-qa.mjs";
 import { pptxReferenceIntake } from "./pptx-reference-intake.mjs";
 import { readJson, resolvePath } from "./lib.mjs";
@@ -161,7 +161,7 @@ server.registerTool(
       jobsPath: z.string().describe("imagegen-jobs.json path."),
       page: z.number().describe("Page number."),
       pngPath: z.string().describe("Generated PNG path."),
-      status: z.enum(["generated", "accepted"]).optional().describe("Backfilled status."),
+      status: z.enum(["generated", "needs_review", "accepted"]).optional().describe("Backfilled status."),
       note: z.string().optional().describe("Optional note."),
     },
   },
@@ -179,19 +179,84 @@ server.registerTool(
 );
 
 server.registerTool(
+  "imagegen_jobs_review",
+  {
+    title: "Imagegen Jobs Review",
+    description: "Record a per-page visual review focused on deck consistency, protocol alignment, and basic generated-image quality.",
+    inputSchema: {
+      jobsPath: z.string().describe("imagegen-jobs.json path."),
+      page: z.number().describe("Page number."),
+      verdict: z.enum(["pass", "warn", "fail"]).optional().describe("Overall review verdict. Omit to mark the page as needing review."),
+      consistency: z.enum(["pass", "warn", "fail"]).optional().describe("Whether the page is visually consistent with the confirmed deck style."),
+      protocolAlignment: z.enum(["pass", "warn", "fail"]).optional().describe("Whether the generated image follows the page protocol."),
+      basicImageQuality: z.enum(["pass", "warn", "fail"]).optional().describe("Whether the generated image has obvious image defects."),
+      note: z.string().optional().describe("Review note."),
+      revisionSuggestion: z.string().optional().describe("Suggested page revision when verdict is fail or warn."),
+      reviewer: z.string().optional().describe("Reviewer identifier."),
+    },
+  },
+  async ({ jobsPath, page, verdict, consistency, protocolAlignment, basicImageQuality, note, revisionSuggestion, reviewer }) => {
+    const resolvedJobs = resolvePath(jobsPath);
+    const result = await reviewJobsFile({
+      jobsPath: resolvedJobs,
+      page,
+      verdict: verdict || null,
+      consistency: consistency || null,
+      protocolAlignment: protocolAlignment || null,
+      basicImageQuality: basicImageQuality || null,
+      note: note || "",
+      revisionSuggestion: revisionSuggestion || "",
+      reviewer: reviewer || "",
+    });
+    return jsonToolResult({ jobs: resolvedJobs, page: result.page.page, status: result.page.status, review: result.page.review, summary: result.summary });
+  },
+);
+
+server.registerTool(
+  "imagegen_jobs_revise",
+  {
+    title: "Imagegen Jobs Revise",
+    description: "Mark one page for regeneration while preserving its previous PNG as a superseded attempt.",
+    inputSchema: {
+      jobsPath: z.string().describe("imagegen-jobs.json path."),
+      page: z.number().describe("Page number."),
+      note: z.string().optional().describe("Revision note."),
+      revisionSuggestion: z.string().optional().describe("Prompt/layout changes to apply in deck-protocol.json before regeneration."),
+      reviewer: z.string().optional().describe("Reviewer identifier."),
+    },
+  },
+  async ({ jobsPath, page, note, revisionSuggestion, reviewer }) => {
+    const resolvedJobs = resolvePath(jobsPath);
+    const result = await reviseJobsFile({
+      jobsPath: resolvedJobs,
+      page,
+      note: note || "",
+      revisionSuggestion: revisionSuggestion || "",
+      reviewer: reviewer || "",
+    });
+    return jsonToolResult({ jobs: resolvedJobs, page: result.page.page, status: result.page.status, revision: result.page.revision, summary: result.summary });
+  },
+);
+
+server.registerTool(
   "imagegen_jobs_to_manifest",
   {
     title: "Imagegen Jobs To Manifest",
-    description: "Create png-manifest.json only after all imagegen jobs are generated or accepted.",
+    description: "Create png-manifest.json only after all imagegen jobs are generated/accepted, or accepted when visual review is enabled.",
     inputSchema: {
       jobsPath: z.string().describe("imagegen-jobs.json path."),
       outPath: z.string().describe("Output png-manifest.json path."),
+      requireAccepted: z.boolean().optional().describe("Require every page to be accepted before manifest creation."),
     },
   },
-  async ({ jobsPath, outPath }) => {
+  async ({ jobsPath, outPath, requireAccepted }) => {
     const resolvedJobs = resolvePath(jobsPath);
     const resolvedOut = resolvePath(outPath);
-    const result = await jobsToManifestFile({ jobsPath: resolvedJobs, outPath: resolvedOut });
+    const result = await jobsToManifestFile({
+      jobsPath: resolvedJobs,
+      outPath: resolvedOut,
+      requireAccepted: requireAccepted === undefined ? null : Boolean(requireAccepted),
+    });
     return jsonToolResult({ manifest: resolvedOut, items: result.manifest.items.length, summary: result.summary });
   },
 );

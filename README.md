@@ -28,6 +28,17 @@ It is built for users who want a clean final deck, not a folder of prompts, plac
   <img src="assets/ppt-composer-system-overview.png" alt="PPT Composer system overview">
 </p>
 
+## New User Guide
+
+If the protocol and QA rules feel abstract, start here:
+
+- [Chinese user guide](docs/user_guid/README.md) explains the rules with diagrams.
+- [Current use cases](docs/user_guid/current-use-cases.zh-CN.md) shows practical prompts for papers, reports, reference images, strict figure pages, and page-by-page revision.
+
+<p align="center">
+  <img src="docs/user_guid/images/workflow-overview.png" alt="PPT Composer user workflow">
+</p>
+
 ## Who It Is For
 
 Use PPT Composer when you want to:
@@ -51,7 +62,7 @@ brief and references
   -> protocol patch tools
   -> localized asset index
   -> imagegen job manifest
-  -> visual QA
+  -> deterministic QA and visual review
   -> complete PNG manifest
   -> PPTX
 ```
@@ -111,7 +122,7 @@ PPT Composer keeps protocol edits and generation state in internal files:
 | --- | --- |
 | `reference-assets/asset-index.json` | Localized reference files and URLs with stable ids, hash, MIME, size, caption, and usage. |
 | `imagegen-jobs.json` | Per-page generation state. `deck-protocol.json` remains the content source of truth. |
-| `visual-qa.json` | Deterministic PNG checks before assembly. Failures block assembly unless a manual override note is recorded. |
+| `visual-qa.json` | PNG checks plus visual review findings. It records missing/tiny/placeholder PNGs, consistency issues, protocol drift, and basic generated-image problems. |
 | `png-manifest.json` | Final assembly gate. It exists only after every planned page has a real generated PNG. |
 
 ### Revising The Protocol
@@ -299,8 +310,10 @@ Expected flow:
 5. Codex applies validated protocol patches and shows the updated plan.
 6. You explicitly confirm the protocol.
 7. Codex generates one PNG per page.
-8. Visual QA runs and a complete PNG manifest is created.
-9. The PPTX is assembled after all PNGs exist.
+8. Deterministic QA and visual review run. Multi-page decks should use a bounded vision/reviewer subagent for review.
+9. Failed pages are revised page by page. The protocol is patched first when prompt or fidelity rules need to change.
+10. A complete PNG manifest is created only after every required page is generated, or accepted when visual review is enabled.
+11. The PPTX is assembled after all PNGs pass the gate.
 
 ## Quality Rules
 
@@ -312,6 +325,9 @@ PPT Composer rejects:
 - placeholders;
 - PPTX assembly before every PNG exists;
 - altered figures, numbers, logos, or table headers in `strict_embed` pages.
+- visual-review failures such as inconsistent style, protocol drift, unreadable text, watermarking, malformed tables/logos, blank regions, or background-only output.
+
+When only one page fails, PPT Composer should revise that page instead of regenerating the whole deck.
 
 ## Verify
 
