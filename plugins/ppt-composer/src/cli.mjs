@@ -13,6 +13,11 @@ import { infographicDeckSpec } from "./infographic-deck.mjs";
 import { buildVisualPlan, imageDeckSpecFromVisualPlan, writePromptSheet } from "./visual-plan.mjs";
 import { referenceIntake } from "./reference-intake.mjs";
 import { validateDeckProtocolAsync } from "./deck-protocol.mjs";
+import { patchProtocolFile } from "./protocol-patch.mjs";
+import { createAssetIndex } from "./asset-index.mjs";
+import { createJobsFile, backfillJobsFile, jobsToManifestFile, summarizeJobs } from "./imagegen-jobs.mjs";
+import { runVisualQaFile } from "./visual-qa.mjs";
+import { pptxReferenceIntake } from "./pptx-reference-intake.mjs";
 import { readJson, resolvePath, writeJson } from "./lib.mjs";
 
 const USAGE = `
@@ -25,6 +30,17 @@ Usage:
   ppt-composer parse-paper --input <paper.pdf|paper.md> --out-dir <parse-dir> [--lang en|ch]
   ppt-composer reference-intake --out-dir <work-dir> --protocol-out <deck-protocol.json> [--inputs <ref1> <ref2> ...] [--title <title>] [--pages 8]
   ppt-composer validate-deck-protocol --protocol <deck-protocol.json> [--require-generated-png]
+  ppt-composer protocol-add-asset --protocol <deck-protocol.json> --asset <asset-json> [--audit-note <note>]
+  ppt-composer protocol-bind-asset --protocol <deck-protocol.json> --page <n> --asset-id <id> [--input-type text|tables|images]
+  ppt-composer protocol-update-page --protocol <deck-protocol.json> --page <n> --patch <json>
+  ppt-composer protocol-set-fidelity --protocol <deck-protocol.json> --page <n> --fidelity free|light_redraw|strict_embed
+  ppt-composer asset-index-create --out-dir <work-dir> --sources <file-or-url> ... [--out <asset-index.json>]
+  ppt-composer imagegen-jobs-create --protocol <deck-protocol.json> --out <imagegen-jobs.json>
+  ppt-composer imagegen-jobs-status --jobs <imagegen-jobs.json>
+  ppt-composer imagegen-jobs-backfill --jobs <imagegen-jobs.json> --page <n> --png <slide.png> [--status generated|accepted] [--note <note>]
+  ppt-composer imagegen-jobs-to-manifest --jobs <imagegen-jobs.json> --out <png-manifest.json>
+  ppt-composer visual-qa --protocol <deck-protocol.json> --jobs <imagegen-jobs.json> --out <visual-qa.json> [--manual-override-note <note>]
+  ppt-composer pptx-reference-intake --input <reference.pptx> --out-dir <work-dir> [--index-out <asset-index.json>] [--protocol <deck-protocol.json>]
   ppt-composer asset-plan --spec <slide-spec.json> --out <asset-plan.json> [--mode supporting|full-slide] [--size 1536x864] [--quality low]  # supporting is deprecated
   ppt-composer visual-plan [--protocol <deck-protocol.json> | --spec <slide-spec.json> | --parse-bundle <parse-bundle.json> | --markdown <outline.md>] --out <visual-plan.json> [--prompt-sheet <prompts.md>]
   ppt-composer generate-assets --plan <asset-plan.json> --out-dir <asset-dir> [--provider codex|openai|placeholder]  # codex writes blocking $imagegen prompts until backfilled
@@ -42,7 +58,7 @@ function parseArgs(argv) {
       continue;
     }
     const key = token.slice(2);
-    if (key === "images" || key === "inputs") {
+    if (key === "images" || key === "inputs" || key === "sources") {
       const targetKey = key;
       out[targetKey] = [];
       while (argv[i + 1] && !argv[i + 1].startsWith("--")) {
@@ -179,7 +195,7 @@ async function main() {
         typography: args.typography,
       },
     });
-    process.stdout.write(`${JSON.stringify({ protocol: protocolPath, assets: result.assets, pages: result.pages, warnings: result.warnings }, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify({ protocol: protocolPath, assetIndex: result.assetIndexPath, assets: result.assets, pages: result.pages, warnings: result.warnings }, null, 2)}\n`);
     return;
   }
 
@@ -194,6 +210,138 @@ async function main() {
       throw new Error(`Invalid deck protocol:\n${report.errors.join("\n")}`);
     }
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "protocol-add-asset") {
+    const result = await patchProtocolFile({
+      protocolPath: resolvePath(requireArg(args, "protocol")),
+      op: "add-asset",
+      payload: { asset: parseJsonArg(requireArg(args, "asset"), "asset") },
+      auditNote: args["audit-note"] || "",
+    });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "protocol-bind-asset") {
+    const result = await patchProtocolFile({
+      protocolPath: resolvePath(requireArg(args, "protocol")),
+      op: "bind-asset",
+      payload: {
+        page: requireArg(args, "page"),
+        assetId: requireArg(args, "asset-id"),
+        inputType: args["input-type"],
+      },
+      auditNote: args["audit-note"] || "",
+    });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "protocol-update-page") {
+    const result = await patchProtocolFile({
+      protocolPath: resolvePath(requireArg(args, "protocol")),
+      op: "update-page",
+      payload: {
+        page: requireArg(args, "page"),
+        patch: parseJsonArg(requireArg(args, "patch"), "patch"),
+      },
+      auditNote: args["audit-note"] || "",
+    });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "protocol-set-fidelity") {
+    const result = await patchProtocolFile({
+      protocolPath: resolvePath(requireArg(args, "protocol")),
+      op: "set-fidelity",
+      payload: {
+        page: requireArg(args, "page"),
+        fidelity: requireArg(args, "fidelity"),
+      },
+      auditNote: args["audit-note"] || "",
+    });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "asset-index-create") {
+    const outDir = resolvePath(requireArg(args, "out-dir"));
+    const indexPath = resolvePath(args.out || path.join(outDir, "reference-assets/asset-index.json"));
+    const index = await createAssetIndex({
+      sources: args.sources || [],
+      outDir,
+      indexPath,
+      caption: args.caption || "",
+      usage: args.usage || "evidence",
+    });
+    process.stdout.write(`${JSON.stringify({ assetIndex: indexPath, assets: index.assets.length, duplicates: index.duplicates.length }, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "imagegen-jobs-create") {
+    const protocolPath = resolvePath(requireArg(args, "protocol"));
+    const outPath = resolvePath(requireArg(args, "out"));
+    const result = await createJobsFile({ protocolPath, outPath });
+    process.stdout.write(`${JSON.stringify({ jobs: outPath, summary: result.summary }, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "imagegen-jobs-status") {
+    const jobsPath = resolvePath(requireArg(args, "jobs"));
+    const jobs = await readJson(jobsPath);
+    process.stdout.write(`${JSON.stringify({ jobs: jobsPath, summary: summarizeJobs(jobs) }, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "imagegen-jobs-backfill") {
+    const jobsPath = resolvePath(requireArg(args, "jobs"));
+    const result = await backfillJobsFile({
+      jobsPath,
+      page: requireArg(args, "page"),
+      pngPath: resolvePath(requireArg(args, "png")),
+      status: args.status || "generated",
+      note: args.note || "",
+    });
+    process.stdout.write(`${JSON.stringify({ jobs: jobsPath, summary: result.summary }, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "imagegen-jobs-to-manifest") {
+    const jobsPath = resolvePath(requireArg(args, "jobs"));
+    const outPath = resolvePath(requireArg(args, "out"));
+    const result = await jobsToManifestFile({ jobsPath, outPath });
+    process.stdout.write(`${JSON.stringify({ manifest: outPath, items: result.manifest.items.length, summary: result.summary }, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "visual-qa") {
+    const report = await runVisualQaFile({
+      protocolPath: resolvePath(requireArg(args, "protocol")),
+      jobsPath: resolvePath(requireArg(args, "jobs")),
+      outPath: resolvePath(requireArg(args, "out")),
+      manualOverrideNote: args["manual-override-note"] || "",
+    });
+    if (report.status === "fail") {
+      throw new Error(`Visual QA failed:\n${report.findings.map((finding) => `${finding.code}: ${finding.message}`).join("\n")}`);
+    }
+    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "pptx-reference-intake") {
+    const inputPath = resolvePath(requireArg(args, "input"));
+    const outDir = resolvePath(requireArg(args, "out-dir"));
+    const indexPath = resolvePath(args["index-out"] || path.join(outDir, "reference-assets/asset-index.json"));
+    const result = await pptxReferenceIntake({
+      inputPath,
+      outDir,
+      indexPath,
+      protocolPath: args.protocol ? resolvePath(args.protocol) : null,
+    });
+    process.stdout.write(`${JSON.stringify({ assetIndex: indexPath, media: result.media.length, theme: result.theme, thumbnails: result.thumbnails, warnings: result.warnings }, null, 2)}\n`);
     return;
   }
 
@@ -326,6 +474,14 @@ async function main() {
   }
 
   throw new Error(`Unknown command: ${command}\n${USAGE}`);
+}
+
+function parseJsonArg(value, label) {
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    throw new Error(`Invalid JSON for --${label}: ${error.message}`);
+  }
 }
 
 main().catch((error) => {

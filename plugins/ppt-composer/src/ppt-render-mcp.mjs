@@ -16,6 +16,11 @@ import { infographicDeckSpec } from "./infographic-deck.mjs";
 import { buildVisualPlan, imageDeckSpecFromVisualPlan, writePromptSheet } from "./visual-plan.mjs";
 import { referenceIntake } from "./reference-intake.mjs";
 import { validateDeckProtocolAsync } from "./deck-protocol.mjs";
+import { patchProtocolFile } from "./protocol-patch.mjs";
+import { createAssetIndex } from "./asset-index.mjs";
+import { createJobsFile, backfillJobsFile, jobsToManifestFile, summarizeJobs } from "./imagegen-jobs.mjs";
+import { runVisualQaFile } from "./visual-qa.mjs";
+import { pptxReferenceIntake } from "./pptx-reference-intake.mjs";
 import { readJson, resolvePath } from "./lib.mjs";
 
 const server = new McpServer({
@@ -60,6 +65,183 @@ server.registerTool(
     const report = await runQa({ pptxPath: resolvedPptx, spec, specPath: resolvedSpec });
     if (outPath) await writeJson(resolvePath(outPath), report);
     return jsonToolResult(report);
+  },
+);
+
+server.registerTool(
+  "protocol_patch",
+  {
+    title: "Protocol Patch",
+    description: "Patch deck-protocol.json through validated operations instead of hand-editing JSON.",
+    inputSchema: {
+      protocolPath: z.string().describe("deck-protocol.json path."),
+      operation: z.enum(["add-asset", "bind-asset", "update-page", "set-fidelity"]).describe("Patch operation."),
+      payload: z.any().describe("Operation payload."),
+      auditNote: z.string().optional().describe("Optional audit log note."),
+    },
+  },
+  async ({ protocolPath, operation, payload, auditNote }) => {
+    const result = await patchProtocolFile({
+      protocolPath: resolvePath(protocolPath),
+      op: operation,
+      payload,
+      auditNote: auditNote || "",
+    });
+    return jsonToolResult(result);
+  },
+);
+
+server.registerTool(
+  "asset_index_create",
+  {
+    title: "Asset Index Create",
+    description: "Localize reference files or URLs and write reference-assets/asset-index.json with hashes, MIME, size, caption, and usage.",
+    inputSchema: {
+      sources: z.array(z.string()).min(1).describe("Local files or remote URLs."),
+      outDir: z.string().describe("Working directory."),
+      indexPath: z.string().optional().describe("Output asset-index.json path."),
+      caption: z.string().optional().describe("Default caption."),
+      usage: z.string().optional().describe("Default usage."),
+    },
+  },
+  async ({ sources, outDir, indexPath, caption, usage }) => {
+    const resolvedOut = resolvePath(outDir);
+    const resolvedIndex = resolvePath(indexPath || path.join(resolvedOut, "reference-assets/asset-index.json"));
+    const index = await createAssetIndex({
+      sources: sources.map((source) => /^https?:\/\//i.test(source) ? source : resolvePath(source)),
+      outDir: resolvedOut,
+      indexPath: resolvedIndex,
+      caption: caption || "",
+      usage: usage || "evidence",
+    });
+    return jsonToolResult({ assetIndex: resolvedIndex, assets: index.assets.length, duplicates: index.duplicates.length });
+  },
+);
+
+server.registerTool(
+  "imagegen_jobs_create",
+  {
+    title: "Imagegen Jobs Create",
+    description: "Create imagegen-jobs.json from deck-protocol.json without changing protocol content.",
+    inputSchema: {
+      protocolPath: z.string().describe("deck-protocol.json path."),
+      outPath: z.string().describe("Output imagegen-jobs.json path."),
+    },
+  },
+  async ({ protocolPath, outPath }) => {
+    const resolvedProtocol = resolvePath(protocolPath);
+    const resolvedOut = resolvePath(outPath);
+    const result = await createJobsFile({ protocolPath: resolvedProtocol, outPath: resolvedOut });
+    return jsonToolResult({ jobs: resolvedOut, summary: result.summary });
+  },
+);
+
+server.registerTool(
+  "imagegen_jobs_status",
+  {
+    title: "Imagegen Jobs Status",
+    description: "Summarize imagegen-jobs.json completion state.",
+    inputSchema: {
+      jobsPath: z.string().describe("imagegen-jobs.json path."),
+    },
+  },
+  async ({ jobsPath }) => {
+    const resolvedJobs = resolvePath(jobsPath);
+    const jobs = await readJson(resolvedJobs);
+    return jsonToolResult({ jobs: resolvedJobs, summary: summarizeJobs(jobs) });
+  },
+);
+
+server.registerTool(
+  "imagegen_jobs_backfill",
+  {
+    title: "Imagegen Jobs Backfill",
+    description: "Backfill one generated PNG into imagegen-jobs.json after validating it is a real PNG and not a placeholder.",
+    inputSchema: {
+      jobsPath: z.string().describe("imagegen-jobs.json path."),
+      page: z.number().describe("Page number."),
+      pngPath: z.string().describe("Generated PNG path."),
+      status: z.enum(["generated", "accepted"]).optional().describe("Backfilled status."),
+      note: z.string().optional().describe("Optional note."),
+    },
+  },
+  async ({ jobsPath, page, pngPath, status, note }) => {
+    const resolvedJobs = resolvePath(jobsPath);
+    const result = await backfillJobsFile({
+      jobsPath: resolvedJobs,
+      page,
+      pngPath: resolvePath(pngPath),
+      status: status || "generated",
+      note: note || "",
+    });
+    return jsonToolResult({ jobs: resolvedJobs, summary: result.summary });
+  },
+);
+
+server.registerTool(
+  "imagegen_jobs_to_manifest",
+  {
+    title: "Imagegen Jobs To Manifest",
+    description: "Create png-manifest.json only after all imagegen jobs are generated or accepted.",
+    inputSchema: {
+      jobsPath: z.string().describe("imagegen-jobs.json path."),
+      outPath: z.string().describe("Output png-manifest.json path."),
+    },
+  },
+  async ({ jobsPath, outPath }) => {
+    const resolvedJobs = resolvePath(jobsPath);
+    const resolvedOut = resolvePath(outPath);
+    const result = await jobsToManifestFile({ jobsPath: resolvedJobs, outPath: resolvedOut });
+    return jsonToolResult({ manifest: resolvedOut, items: result.manifest.items.length, summary: result.summary });
+  },
+);
+
+server.registerTool(
+  "visual_qa",
+  {
+    title: "Visual QA",
+    description: "Run deterministic PNG and image-first visual gate checks before final manifest assembly.",
+    inputSchema: {
+      protocolPath: z.string().describe("deck-protocol.json path."),
+      jobsPath: z.string().describe("imagegen-jobs.json path."),
+      outPath: z.string().describe("Output visual QA report path."),
+      manualOverrideNote: z.string().optional().describe("Required note for a manual override."),
+    },
+  },
+  async ({ protocolPath, jobsPath, outPath, manualOverrideNote }) => {
+    const report = await runVisualQaFile({
+      protocolPath: resolvePath(protocolPath),
+      jobsPath: resolvePath(jobsPath),
+      outPath: resolvePath(outPath),
+      manualOverrideNote: manualOverrideNote || "",
+    });
+    if (report.status === "fail") throw new Error(`Visual QA failed:\n${report.findings.map((finding) => `${finding.code}: ${finding.message}`).join("\n")}`);
+    return jsonToolResult(report);
+  },
+);
+
+server.registerTool(
+  "pptx_reference_intake",
+  {
+    title: "PPTX Reference Intake",
+    description: "Extract PPTX OOXML theme, fonts, media, relationships, and optional LibreOffice thumbnails into an asset index.",
+    inputSchema: {
+      inputPath: z.string().describe("Reference PPTX path."),
+      outDir: z.string().describe("Working directory."),
+      indexPath: z.string().optional().describe("Output asset-index.json path."),
+      protocolPath: z.string().optional().describe("Optional deck-protocol.json to update style/assets."),
+    },
+  },
+  async ({ inputPath, outDir, indexPath, protocolPath }) => {
+    const resolvedOut = resolvePath(outDir);
+    const resolvedIndex = resolvePath(indexPath || path.join(resolvedOut, "reference-assets/asset-index.json"));
+    const result = await pptxReferenceIntake({
+      inputPath: resolvePath(inputPath),
+      outDir: resolvedOut,
+      indexPath: resolvedIndex,
+      protocolPath: protocolPath ? resolvePath(protocolPath) : null,
+    });
+    return jsonToolResult({ assetIndex: resolvedIndex, media: result.media.length, theme: result.theme, thumbnails: result.thumbnails, warnings: result.warnings });
   },
 );
 
