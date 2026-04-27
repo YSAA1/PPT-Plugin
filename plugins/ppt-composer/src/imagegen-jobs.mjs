@@ -6,7 +6,13 @@ import { speakerNotesFromPage } from "./deck-protocol.mjs";
 const DONE_STATES = new Set(["generated", "accepted"]);
 const BACKFILL_STATES = new Set(["generated", "accepted", "needs_review"]);
 const REVIEW_VERDICTS = new Set(["pass", "warn", "fail"]);
-const REVIEW_DIMENSIONS = ["consistency", "protocol_alignment", "basic_image_quality"];
+const REVIEW_DIMENSIONS = [
+  "consistency",
+  "protocol_alignment",
+  "reference_fidelity",
+  "text_legibility",
+  "artifact_quality",
+];
 const SEVERITY = { pass: 0, warn: 1, fail: 2 };
 
 export function createImagegenJobs(protocol, { protocolPath = null, outPath = null } = {}) {
@@ -37,6 +43,7 @@ export function createImagegenJobs(protocol, { protocolPath = null, outPath = nu
       note: "",
       attempts: [],
       currentAttempt: null,
+      execution_summary: null,
       review: null,
       revision: null,
       accepted_png: null,
@@ -44,7 +51,15 @@ export function createImagegenJobs(protocol, { protocolPath = null, outPath = nu
       worker_context: {
         style_lock_id: styleLock.id,
         source: "style_lock + protocol page slice",
+        default_spawn: "context_packet_low_reasoning",
         prompt_contract: "Use the same style_lock for every page; forked chat history is supplemental only.",
+        packet_contract: [
+          "verbatim style_lock",
+          "assigned page protocol slice",
+          "relevant reference assets",
+          "output_png path",
+          "execution checklist",
+        ],
       },
     })),
     outPath,
@@ -86,7 +101,14 @@ export function summarizeJobs(jobs, { requireAccepted = null } = {}) {
   return summary;
 }
 
-export async function backfillImagegenJob(jobs, { page, pngPath, status = "generated", note = "", baseDir = process.cwd() } = {}) {
+export async function backfillImagegenJob(jobs, {
+  page,
+  pngPath,
+  status = "generated",
+  note = "",
+  executionSummary = null,
+  baseDir = process.cwd(),
+} = {}) {
   const target = (jobs.pages || []).find((item) => Number(item.page) === Number(page));
   if (!target) throw new Error(`Unknown imagegen job page: ${page}`);
   if (!BACKFILL_STATES.has(status)) throw new Error(`Invalid backfill status: ${status}`);
@@ -116,6 +138,7 @@ export async function backfillImagegenJob(jobs, { page, pngPath, status = "gener
     updatedAt: new Date().toISOString(),
     note,
     png: { width: png.width, height: png.height, size: png.size },
+    execution_summary: normalizeExecutionSummary(executionSummary),
     review,
   };
   target.attempts.push(attempt);
@@ -125,6 +148,7 @@ export async function backfillImagegenJob(jobs, { page, pngPath, status = "gener
   target.updatedAt = new Date().toISOString();
   target.note = note;
   target.png = { width: png.width, height: png.height, size: png.size };
+  target.execution_summary = attempt.execution_summary;
   target.review = review;
   target.revision = null;
   if (status === "accepted") target.accepted_png = resolved;
@@ -166,6 +190,9 @@ export function reviewImagegenJob(jobs, {
   consistency = null,
   protocolAlignment = null,
   basicImageQuality = null,
+  referenceFidelity = null,
+  textLegibility = null,
+  artifactQuality = null,
 } = {}) {
   if (!verdict) return markImagegenJobNeedsReview(jobs, { page, note, reviewer });
   if (!REVIEW_VERDICTS.has(verdict)) throw new Error(`Invalid visual review verdict: ${verdict}`);
@@ -178,9 +205,14 @@ export function reviewImagegenJob(jobs, {
     verdict,
     consistency,
     protocolAlignment,
-    basicImageQuality,
+    referenceFidelity,
+    textLegibility,
+    artifactQuality: artifactQuality || basicImageQuality,
   });
   const finalVerdict = strongestVerdict([verdict, ...Object.values(categories)]);
+  if (finalVerdict === "fail" && (!note.trim() || !revisionSuggestion.trim())) {
+    throw new Error("Failing visual reviews must include --note and --revision-suggestion");
+  }
   const reviewedAt = new Date().toISOString();
   const review = {
     status: "reviewed",
@@ -251,6 +283,11 @@ export function jobsToPngManifest(jobs, { outPath = null, requireAccepted = null
     const requirement = acceptedOnly ? "accepted" : "generated or accepted";
     throw new Error(`Cannot create PNG manifest until every imagegen job is ${requirement}`);
   }
+  for (const page of jobs.pages || []) {
+    if (page.fidelity === "strict_embed" && page.review?.categories?.reference_fidelity === "fail") {
+      throw new Error(`Cannot create PNG manifest: strict_embed page ${page.page} failed reference fidelity review`);
+    }
+  }
   return {
     kind: "image-first-ppt-png-manifest",
     version: "0.1",
@@ -277,9 +314,9 @@ export async function createJobsFile({ protocolPath, outPath }) {
   return { jobs, summary: summarizeJobs(jobs) };
 }
 
-export async function backfillJobsFile({ jobsPath, page, pngPath, status, note }) {
+export async function backfillJobsFile({ jobsPath, page, pngPath, status, note, executionSummary = null }) {
   const jobs = await readJson(jobsPath);
-  await backfillImagegenJob(jobs, { page, pngPath, status, note, baseDir: path.dirname(jobsPath) });
+  await backfillImagegenJob(jobs, { page, pngPath, status, note, executionSummary, baseDir: path.dirname(jobsPath) });
   await writeJson(jobsPath, jobs);
   return { jobs, summary: summarizeJobs(jobs) };
 }
@@ -315,7 +352,7 @@ function ensureVisualReview(jobs) {
   jobs.visualReview = {
     ...(jobs.visualReview || {}),
     enabled: true,
-    dimensions: jobs.visualReview?.dimensions || REVIEW_DIMENSIONS,
+    dimensions: REVIEW_DIMENSIONS,
     maxAutoRevisions: Number(jobs.visualReview?.maxAutoRevisions || 2),
   };
 }
@@ -327,6 +364,7 @@ function ensurePageShape(page) {
   page.review ??= null;
   page.revision ??= null;
   page.accepted_png ??= null;
+  page.execution_summary ??= null;
 }
 
 function currentAttempt(page) {
@@ -350,11 +388,20 @@ function supersedeCurrentAttemptIfNeeded(page, nextPath, note) {
   if (!page.superseded_pngs.includes(attempt.path)) page.superseded_pngs.push(attempt.path);
 }
 
-function normalizeReviewCategories({ verdict, consistency, protocolAlignment, basicImageQuality }) {
+function normalizeReviewCategories({
+  verdict,
+  consistency,
+  protocolAlignment,
+  referenceFidelity,
+  textLegibility,
+  artifactQuality,
+}) {
   return {
     consistency: normalizeVerdict(consistency || verdict, "consistency"),
     protocol_alignment: normalizeVerdict(protocolAlignment || verdict, "protocol_alignment"),
-    basic_image_quality: normalizeVerdict(basicImageQuality || verdict, "basic_image_quality"),
+    reference_fidelity: normalizeVerdict(referenceFidelity || verdict, "reference_fidelity"),
+    text_legibility: normalizeVerdict(textLegibility || verdict, "text_legibility"),
+    artifact_quality: normalizeVerdict(artifactQuality || verdict, "artifact_quality"),
   };
 }
 
@@ -365,6 +412,35 @@ function normalizeVerdict(value, label) {
 
 function strongestVerdict(values) {
   return values.reduce((strongest, value) => (SEVERITY[value] > SEVERITY[strongest] ? value : strongest), "pass");
+}
+
+function normalizeExecutionSummary(summary) {
+  if (!summary) return null;
+  const source = typeof summary === "string" ? JSON.parse(summary) : summary;
+  if (!source || typeof source !== "object" || Array.isArray(source)) {
+    throw new Error("execution summary must be a JSON object");
+  }
+  const normalized = {
+    claim_followed: normalizeChecklistAnswer(source.claim_followed, "claim_followed"),
+    reference_assets_used: normalizeChecklistAnswer(source.reference_assets_used, "reference_assets_used"),
+    fidelity_followed: normalizeChecklistAnswer(source.fidelity_followed, "fidelity_followed"),
+    negative_prompt_avoided: normalizeChecklistAnswer(source.negative_prompt_avoided, "negative_prompt_avoided"),
+    uncertainties: normalizeUncertainties(source.uncertainties),
+  };
+  return normalized;
+}
+
+function normalizeChecklistAnswer(value, label) {
+  if (value === true || value === false) return value;
+  if (typeof value === "string" && value.trim()) return value.trim();
+  throw new Error(`execution_summary.${label} must be boolean or a short string`);
+}
+
+function normalizeUncertainties(value) {
+  if (value === undefined || value === null) return "";
+  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean).join("; ");
+  if (typeof value === "string") return value.trim();
+  throw new Error("execution_summary.uncertainties must be a string or array of strings");
 }
 
 function buildStyleLock(protocol = {}) {
@@ -391,8 +467,13 @@ function buildStyleLock(protocol = {}) {
       description: style.description || "",
       palette: style.palette || [],
       typography: style.typography || "",
+      density: style.density || style.layout_density || "medium",
+      font_scale: style.font_scale || style.font_size_tendency || "readable slide-scale titles and labels",
+      chart_style: style.chart_style || "clean consulting/research charts with legible labels",
+      margins: style.margins || style.whitespace || "consistent margins and controlled whitespace",
       template_image_ids: style.template_image_ids || [],
       logo_ids: style.logo_ids || [],
+      forbidden: style.forbidden || [],
     },
     page_list: pages,
     assets: (protocol.assets || []).map((asset) => ({

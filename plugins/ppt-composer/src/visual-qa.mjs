@@ -3,6 +3,13 @@ import { inspectPng, isLikelyTinyPng } from "./png-utils.mjs";
 import { readJson, writeJson } from "./lib.mjs";
 
 const PNG_READY_STATES = new Set(["generated", "accepted", "needs_review"]);
+const VISUAL_REVIEW_DIMENSIONS = [
+  "consistency",
+  "protocol_alignment",
+  "reference_fidelity",
+  "text_legibility",
+  "artifact_quality",
+];
 
 export async function runVisualQa({ protocol, jobs, baseDir = process.cwd(), manualOverrideNote = "" } = {}) {
   if (!protocol) throw new Error("visual QA requires protocol");
@@ -55,6 +62,13 @@ export async function runVisualQa({ protocol, jobs, baseDir = process.cwd(), man
     if (page.fidelity === "strict_embed" && !(page.reference_asset_ids || []).length) {
       deterministicFindings.push(fail(page.page, "strict_embed_missing_reference", "strict_embed page must bind required reference assets"));
     }
+    if (page.fidelity === "strict_embed" && job.review?.categories?.reference_fidelity === "fail") {
+      deterministicFindings.push(fail(
+        page.page,
+        "strict_embed_reference_fidelity_failed",
+        "strict_embed page failed reference fidelity review and cannot be assembled",
+      ));
+    }
     addVisualGateFinding(visualFindings, page, job, visualReviewEnabled);
   }
 
@@ -80,7 +94,7 @@ export async function runVisualQa({ protocol, jobs, baseDir = process.cwd(), man
     deterministicFindings,
     visualReview: {
       enabled: visualReviewEnabled,
-      dimensions: jobs.visualReview?.dimensions || ["consistency", "protocol_alignment", "basic_image_quality"],
+      dimensions: jobs.visualReview?.dimensions || VISUAL_REVIEW_DIMENSIONS,
       pages: visualReviewPages,
       findings: visualFindings,
     },
@@ -162,10 +176,13 @@ function visualReviewSummary(protocolPage, job) {
     protocolChecks: {
       consistency: "reviewer-verdict",
       protocol_alignment: "reviewer-verdict",
-      basic_image_quality: "deterministic-and-reviewer-verdict",
+      reference_fidelity: "reviewer-verdict",
+      text_legibility: "reviewer-verdict",
+      artifact_quality: "deterministic-and-reviewer-verdict",
       fidelity: protocolPage.fidelity,
       reference_asset_ids: protocolPage.reference_asset_ids || [],
     },
+    executionSummary: job?.execution_summary || null,
     attempts,
   };
 }

@@ -163,9 +163,16 @@ server.registerTool(
       pngPath: z.string().describe("Generated PNG path."),
       status: z.enum(["generated", "needs_review", "accepted"]).optional().describe("Backfilled status."),
       note: z.string().optional().describe("Optional note."),
+      executionSummary: z.object({
+        claim_followed: z.union([z.boolean(), z.string()]).describe("Whether the generated image follows the page claim."),
+        reference_assets_used: z.union([z.boolean(), z.string()]).describe("Whether assigned reference assets were used."),
+        fidelity_followed: z.union([z.boolean(), z.string()]).describe("Whether the fidelity mode was followed."),
+        negative_prompt_avoided: z.union([z.boolean(), z.string()]).describe("Whether negative prompt constraints were avoided."),
+        uncertainties: z.union([z.string(), z.array(z.string())]).optional().describe("Any uncertainty the worker wants the leader/reviewer to know."),
+      }).optional().describe("Short worker execution checklist."),
     },
   },
-  async ({ jobsPath, page, pngPath, status, note }) => {
+  async ({ jobsPath, page, pngPath, status, note, executionSummary }) => {
     const resolvedJobs = resolvePath(jobsPath);
     const result = await backfillJobsFile({
       jobsPath: resolvedJobs,
@@ -173,6 +180,7 @@ server.registerTool(
       pngPath: resolvePath(pngPath),
       status: status || "generated",
       note: note || "",
+      executionSummary: executionSummary || null,
     });
     return jsonToolResult({ jobs: resolvedJobs, summary: result.summary });
   },
@@ -182,20 +190,36 @@ server.registerTool(
   "imagegen_jobs_review",
   {
     title: "Imagegen Jobs Review",
-    description: "Record a per-page visual review focused on deck consistency, protocol alignment, and basic generated-image quality.",
+    description: "Record a per-page visual review across consistency, protocol alignment, reference fidelity, text legibility, and artifact quality.",
     inputSchema: {
       jobsPath: z.string().describe("imagegen-jobs.json path."),
       page: z.number().describe("Page number."),
       verdict: z.enum(["pass", "warn", "fail"]).optional().describe("Overall review verdict. Omit to mark the page as needing review."),
       consistency: z.enum(["pass", "warn", "fail"]).optional().describe("Whether the page is visually consistent with the confirmed deck style."),
       protocolAlignment: z.enum(["pass", "warn", "fail"]).optional().describe("Whether the generated image follows the page protocol."),
-      basicImageQuality: z.enum(["pass", "warn", "fail"]).optional().describe("Whether the generated image has obvious image defects."),
+      referenceFidelity: z.enum(["pass", "warn", "fail"]).optional().describe("Whether referenced assets, figures, tables, numbers, logos, and captions are preserved."),
+      textLegibility: z.enum(["pass", "warn", "fail"]).optional().describe("Whether visible slide text is readable."),
+      artifactQuality: z.enum(["pass", "warn", "fail"]).optional().describe("Whether the generated image avoids obvious artifacts."),
+      basicImageQuality: z.enum(["pass", "warn", "fail"]).optional().describe("Deprecated alias for artifactQuality."),
       note: z.string().optional().describe("Review note."),
       revisionSuggestion: z.string().optional().describe("Suggested page revision when verdict is fail or warn."),
       reviewer: z.string().optional().describe("Reviewer identifier."),
     },
   },
-  async ({ jobsPath, page, verdict, consistency, protocolAlignment, basicImageQuality, note, revisionSuggestion, reviewer }) => {
+  async ({
+    jobsPath,
+    page,
+    verdict,
+    consistency,
+    protocolAlignment,
+    referenceFidelity,
+    textLegibility,
+    artifactQuality,
+    basicImageQuality,
+    note,
+    revisionSuggestion,
+    reviewer,
+  }) => {
     const resolvedJobs = resolvePath(jobsPath);
     const result = await reviewJobsFile({
       jobsPath: resolvedJobs,
@@ -203,6 +227,9 @@ server.registerTool(
       verdict: verdict || null,
       consistency: consistency || null,
       protocolAlignment: protocolAlignment || null,
+      referenceFidelity: referenceFidelity || null,
+      textLegibility: textLegibility || null,
+      artifactQuality: artifactQuality || null,
       basicImageQuality: basicImageQuality || null,
       note: note || "",
       revisionSuggestion: revisionSuggestion || "",

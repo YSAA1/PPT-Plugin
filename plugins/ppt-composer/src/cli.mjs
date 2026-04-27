@@ -37,8 +37,8 @@ Usage:
   ppt-composer asset-index-create --out-dir <work-dir> --sources <file-or-url> ... [--out <asset-index.json>]
   ppt-composer imagegen-jobs-create --protocol <deck-protocol.json> --out <imagegen-jobs.json>
   ppt-composer imagegen-jobs-status --jobs <imagegen-jobs.json>
-  ppt-composer imagegen-jobs-backfill --jobs <imagegen-jobs.json> --page <n> --png <slide.png> [--status generated|needs_review|accepted] [--note <note>]
-  ppt-composer imagegen-jobs-review --jobs <imagegen-jobs.json> --page <n> [--verdict pass|warn|fail] [--consistency pass|warn|fail] [--protocol-alignment pass|warn|fail] [--basic-image-quality pass|warn|fail] [--note <note>] [--revision-suggestion <note>]
+  ppt-composer imagegen-jobs-backfill --jobs <imagegen-jobs.json> --page <n> --png <slide.png> [--status generated|needs_review|accepted] [--note <note>] [--execution-summary <json>]
+  ppt-composer imagegen-jobs-review --jobs <imagegen-jobs.json> --page <n> [--verdict pass|warn|fail] [--consistency pass|warn|fail] [--protocol-alignment pass|warn|fail] [--reference-fidelity pass|warn|fail] [--text-legibility pass|warn|fail] [--artifact-quality pass|warn|fail] [--note <note>] [--revision-suggestion <note>]
   ppt-composer imagegen-jobs-revise --jobs <imagegen-jobs.json> --page <n> [--note <note>] [--revision-suggestion <note>]
   ppt-composer imagegen-jobs-to-manifest --jobs <imagegen-jobs.json> --out <png-manifest.json> [--require-accepted]
   ppt-composer visual-qa --protocol <deck-protocol.json> --jobs <imagegen-jobs.json> --out <visual-qa.json> [--manual-override-note <note>]
@@ -306,6 +306,7 @@ async function main() {
       pngPath: resolvePath(requireArg(args, "png")),
       status: args.status || "generated",
       note: args.note || "",
+      executionSummary: args["execution-summary"] ? parseJsonArg(args["execution-summary"], "execution-summary") : null,
     });
     process.stdout.write(`${JSON.stringify({ jobs: jobsPath, summary: result.summary }, null, 2)}\n`);
     return;
@@ -323,6 +324,9 @@ async function main() {
       consistency: args.consistency || null,
       protocolAlignment: args["protocol-alignment"] || null,
       basicImageQuality: args["basic-image-quality"] || null,
+      referenceFidelity: args["reference-fidelity"] || null,
+      textLegibility: args["text-legibility"] || null,
+      artifactQuality: args["artifact-quality"] || null,
     });
     process.stdout.write(`${JSON.stringify({ jobs: jobsPath, page: result.page.page, status: result.page.status, review: result.page.review, summary: result.summary }, null, 2)}\n`);
     return;
