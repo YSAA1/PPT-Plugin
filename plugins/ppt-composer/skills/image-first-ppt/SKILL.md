@@ -172,8 +172,11 @@ Subagent runtime and model rules:
 Shared context rules:
 
 - Before spawning workers, the leader MUST create one shared deck generation context from the confirmed protocol: deck title, audience, aspect ratio, global style, palette, typography, logo/template asset ids, page list, global negative rules, QA acceptance rules, and asset index.
-- Every worker MUST receive the exact same shared deck generation context plus only its assigned page protocol slice and relevant reference asset paths.
+- `imagegen-jobs.json` MUST contain a `style_lock` object. Treat that object as the canonical shared visual contract for all image-generation and visual-review workers.
+- Every worker MUST receive the exact same `style_lock` plus only its assigned page protocol slice and relevant reference asset paths.
 - MUST NOT rely on inherited chat history as the only consistency mechanism.
+- Forked chat history is supplemental only. If fork history fails, is unavailable, or differs between workers, consistency MUST still come from the explicit `style_lock`.
+- A worker prompt that does not include the `style_lock` is invalid, even if `fork_context: true` was used.
 - Every subagent task MUST be a hard-bounded image-generation task. Subagent output is PNG.
 
 Spawn call rules:
@@ -182,6 +185,7 @@ Spawn call rules:
 - Preferred consistency-first shape is: omit `agent_type`, set `fork_context: true`, set `reasoning_effort: "low"`, and still include the shared deck generation context in the worker prompt.
 - If role-less forked spawn fails, or if a role is required by the runtime, MUST omit `fork_context`; write the shared deck generation context and complete task context into `message` or `items`.
 - Context-packet fallback shape is: set `fork_context: false` or omit it, set `reasoning_effort: "low"`, and put the shared deck generation context plus assigned page context in the worker prompt.
+- The fallback prompt MUST include the same `style_lock` JSON used by forked workers. Do not shorten, paraphrase, or rebuild the style contract per worker.
 - If subagent spawning is unavailable, blocked, or fails, the leader MAY fall back to direct generation, but MUST record the reason in `imagegen-jobs.json` notes or the final handoff. Silent fallback is FORBIDDEN.
 - The leader MUST wait for subagent results or failure status before creating `png-manifest.json`.
 
@@ -233,6 +237,8 @@ Scope:
 - Use low reasoning only; focus on direct image generation, not analysis.
 
 Shared deck generation context:
+- Style lock:
+  <verbatim jobs.style_lock JSON; required even when fork_context worked>
 - Deck title: <title>
 - Audience: <audience>
 - Aspect ratio and size: <16:9 / width x height>

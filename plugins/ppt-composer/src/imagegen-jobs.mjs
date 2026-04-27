@@ -11,11 +11,13 @@ const SEVERITY = { pass: 0, warn: 1, fail: 2 };
 
 export function createImagegenJobs(protocol, { protocolPath = null, outPath = null } = {}) {
   const pages = protocol.pages || [];
+  const styleLock = buildStyleLock(protocol);
   return {
     kind: "ppt-composer-imagegen-jobs",
     version: "0.1",
     createdAt: new Date().toISOString(),
     protocol: protocolPath || protocol.source?.protocolPath || null,
+    style_lock: styleLock,
     visualReview: {
       enabled: false,
       dimensions: REVIEW_DIMENSIONS,
@@ -39,6 +41,11 @@ export function createImagegenJobs(protocol, { protocolPath = null, outPath = nu
       revision: null,
       accepted_png: null,
       superseded_pngs: [],
+      worker_context: {
+        style_lock_id: styleLock.id,
+        source: "style_lock + protocol page slice",
+        prompt_contract: "Use the same style_lock for every page; forked chat history is supplemental only.",
+      },
     })),
     outPath,
   };
@@ -358,4 +365,57 @@ function normalizeVerdict(value, label) {
 
 function strongestVerdict(values) {
   return values.reduce((strongest, value) => (SEVERITY[value] > SEVERITY[strongest] ? value : strongest), "pass");
+}
+
+function buildStyleLock(protocol = {}) {
+  const deck = protocol.deck || {};
+  const style = protocol.style || {};
+  const pages = (protocol.pages || []).map((page) => ({
+    page: Number(page.page),
+    title: page.title,
+    claim: page.claim,
+    fidelity: page.fidelity,
+  }));
+  return {
+    id: "deck-style-lock-v1",
+    source: "deck-protocol.json",
+    purpose: "Keep all image-generation and visual-review workers aligned even when subagent history forking fails.",
+    deck: {
+      title: deck.title || "",
+      language: deck.language || "zh",
+      audience: deck.audience || "",
+      page_count: Number(deck.page_count || pages.length || 0),
+      aspect_ratio: deck.aspect_ratio || "16:9",
+    },
+    style: {
+      description: style.description || "",
+      palette: style.palette || [],
+      typography: style.typography || "",
+      template_image_ids: style.template_image_ids || [],
+      logo_ids: style.logo_ids || [],
+    },
+    page_list: pages,
+    assets: (protocol.assets || []).map((asset) => ({
+      id: asset.id,
+      type: asset.type,
+      caption: asset.caption || asset.summary || "",
+      usage: asset.usage || "",
+      path: asset.path || "",
+    })),
+    format_contract: [
+      "Every slide is one complete 16:9 full-slide PNG unless the protocol says otherwise.",
+      "All visible title, claim, labels, chart text, captions, and logos must be rendered inside the PNG.",
+      "Do not create a blank background, prompt-only handoff, SVG, HTML screenshot, or later PowerPoint text overlay.",
+      "Use the same visual system, typography, palette, density, margins, and hierarchy across all pages.",
+      "Do not invent or alter facts, numbers, curves, table headers, logos, or captions on strict_embed pages.",
+    ],
+    negative_contract: [
+      "No watermark.",
+      "No unreadable text.",
+      "No inconsistent per-page art direction.",
+      "No decorative clutter that breaks the confirmed deck style.",
+      "No background-only slide.",
+    ],
+    worker_rule: "Every worker prompt must include this style_lock verbatim plus only the assigned protocol page slice. Forked chat history is never the source of truth for visual consistency.",
+  };
 }

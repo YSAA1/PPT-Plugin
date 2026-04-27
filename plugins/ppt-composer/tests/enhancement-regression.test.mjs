@@ -208,7 +208,10 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(skillSource, /If a page range would exceed the maximum wait time, split the range/i);
   assert.match(skillSource, /reasoning_effort: "low"/i);
   assert.match(skillSource, /leader MUST create one shared deck generation context/i);
-  assert.match(skillSource, /Every worker MUST receive the exact same shared deck generation context/i);
+  assert.match(skillSource, /style_lock/i);
+  assert.match(skillSource, /Forked chat history is supplemental only/i);
+  assert.match(skillSource, /A worker prompt that does not include the `style_lock` is invalid/i);
+  assert.match(skillSource, /Every worker MUST receive the exact same `style_lock`/i);
   assert.match(skillSource, /MUST NOT rely on inherited chat history as the only consistency mechanism/i);
   assert.match(skillSource, /MUST NOT call `spawn_agent` with `fork_context: true` when also setting `agent_type`/i);
   assert.match(skillSource, /Preferred consistency-first shape is: omit `agent_type`, set `fork_context: true`/i);
@@ -673,6 +676,11 @@ test('imagegen jobs gate manifest creation and visual QA blocks bad PNGs', async
   assert.equal(createResult.summary.total, 20);
   assert.equal(createResult.summary.pending, 20);
   const jobsAfterCreate = JSON.parse(await readFile(jobsPath, 'utf8'));
+  assert.equal(jobsAfterCreate.style_lock.id, 'deck-style-lock-v1');
+  assert.equal(jobsAfterCreate.style_lock.deck.title, 'Jobs Demo');
+  assert.equal(jobsAfterCreate.style_lock.page_list.length, 20);
+  assert.match(jobsAfterCreate.style_lock.worker_rule, /Forked chat history is never the source of truth/);
+  assert.equal(jobsAfterCreate.pages[0].worker_context.style_lock_id, 'deck-style-lock-v1');
   assert.equal(jobsAfterCreate.pages[0].speaker_notes, 'Presenter note for page one.');
   assert.equal(jobsAfterCreate.pages[1].speaker_notes, 'Alias note line one.\nAlias note line two.');
   assert.equal(jobsAfterCreate.pages[2].speaker_notes, '中文备注会写入 PPT notes。');
