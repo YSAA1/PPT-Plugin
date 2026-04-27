@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { isFile, slugify } from "./lib.mjs";
 
 const FIDELITY_VALUES = new Set(["free", "light_redraw", "strict_embed"]);
+const SPEAKER_NOTE_KEYS = ["speaker_notes", "speakerNotes", "notes", "remarks", "presenter_notes", "备注"];
 
 export function createDeckProtocol({ mode = "brief_mode", deck = {}, style = {}, assets = [], pages = [], source = null } = {}) {
   return {
@@ -73,6 +74,10 @@ export function validateDeckProtocol(protocol, { requireGeneratedPng = false, ba
     if (!FIDELITY_VALUES.has(page.fidelity)) errors.push(`${label}.fidelity must be free, light_redraw, or strict_embed`);
     if (!page.output_png) errors.push(`${label}.output_png is required`);
     if (page.output_png && !/\.png$/i.test(page.output_png)) errors.push(`${label}.output_png must end with .png`);
+    const invalidNoteKey = SPEAKER_NOTE_KEYS.find((key) => page[key] !== undefined && !isValidSpeakerNotesValue(page[key]));
+    if (invalidNoteKey) {
+      errors.push(`${label}.${invalidNoteKey} must be a string or an array of strings`);
+    }
 
     for (const assetId of page.reference_asset_ids || []) {
       if (!assetIds.has(assetId)) errors.push(`${label}.reference_asset_ids includes unknown asset id: ${assetId}`);
@@ -164,6 +169,7 @@ export function visualPlanFromDeckProtocol(protocol, { outputPath = null, defaul
       negativePrompt: page.negativePrompt,
       codexPrompt: `$imagegen ${page.prompt}`,
       output: protocolPage.output_png,
+      speakerNotes: page.speakerNotes,
       size,
       quality,
       provider,
@@ -262,6 +268,7 @@ function visualPageFromProtocolPage(protocolPage, protocol, assetsById, index) {
     sourceEvidence: evidence,
     referenceAssets,
     protocolPage,
+    speakerNotes: speakerNotesFromPage(protocolPage),
     sourcePath: protocol.source?.inputs || null,
     layoutIntent: protocolPage.layout_intent || "protocol-defined finished full-slide image",
     visualType: "protocol-page",
@@ -291,6 +298,7 @@ function protocolPageSlice(page, referenceAssets) {
     fidelity: page.fidelity,
     final_image_prompt: page.final_image_prompt,
     negative_prompt: page.negative_prompt,
+    speaker_notes: speakerNotesFromPage(page),
     output_png: page.output_png,
     reference_assets: referenceAssets.map((asset) => ({
       id: asset.id,
@@ -300,4 +308,21 @@ function protocolPageSlice(page, referenceAssets) {
       usage: asset.usage || "",
     })),
   };
+}
+
+export function speakerNotesFromPage(page = {}) {
+  for (const key of SPEAKER_NOTE_KEYS) {
+    if (page[key] !== undefined) return normalizeSpeakerNotes(page[key]);
+  }
+  return "";
+}
+
+export function normalizeSpeakerNotes(value) {
+  if (value === null || value === undefined) return "";
+  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean).join("\n");
+  return String(value).trim();
+}
+
+function isValidSpeakerNotesValue(value) {
+  return typeof value === "string" || (Array.isArray(value) && value.every((item) => typeof item === "string"));
 }

@@ -68,6 +68,7 @@ The final PPTX contains one full-slide PNG per page. Slide text, titles, charts,
 - page titles and claims;
 - evidence bindings;
 - per-page image prompts;
+- optional speaker notes;
 - output PNG paths.
 
 Pages reference assets by id:
@@ -94,6 +95,7 @@ Pages reference assets by id:
       },
       "reference_asset_ids": ["fig-1"],
       "fidelity": "strict_embed",
+      "speaker_notes": "Explain the transfer result and call out the heavy-load condition.",
       "output_png": "dist/slides/slide-03.png"
     }
   ]
@@ -101,6 +103,7 @@ Pages reference assets by id:
 ```
 
 Do not put raw image paths in `content_inputs`. Put files in `assets`, then reference their ids from pages.
+Use `speaker_notes` for presenter notes. It is carried into PowerPoint speaker notes and is not rendered as visible slide text. Existing protocols using `notes`, `remarks`, `presenter_notes`, or `备注` are accepted as aliases.
 
 PPT Composer keeps protocol edits and generation state in internal files:
 

@@ -1,6 +1,7 @@
 import path from "node:path";
 import { inspectPng } from "./png-utils.mjs";
 import { readJson, writeJson } from "./lib.mjs";
+import { speakerNotesFromPage } from "./deck-protocol.mjs";
 
 const DONE_STATES = new Set(["generated", "accepted"]);
 
@@ -20,6 +21,7 @@ export function createImagegenJobs(protocol, { protocolPath = null, outPath = nu
       fidelity: page.fidelity,
       prompt: page.final_image_prompt,
       negative_prompt: page.negative_prompt,
+      speaker_notes: speakerNotesFromPage(page),
       updatedAt: null,
       note: "",
     })),
@@ -74,6 +76,7 @@ export function jobsToPngManifest(jobs, { outPath = null } = {}) {
       sourceStatus: page.status,
       title: page.title,
       fidelity: page.fidelity,
+      speaker_notes: page.speaker_notes || "",
     })),
     outPath,
   };

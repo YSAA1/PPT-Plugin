@@ -5,7 +5,8 @@ export async function imagesToSlideSpec(images, { title = "Image deck" } = {}) {
   const assets = [];
   const slides = [];
 
-  for (const [index, imagePath] of images.entries()) {
+  for (const [index, imageInput] of images.entries()) {
+    const imagePath = typeof imageInput === "string" ? imageInput : imageInput.path;
     if (!(await isFile(imagePath))) {
       throw new Error(`Image not found: ${imagePath}`);
     }
@@ -29,7 +30,7 @@ export async function imagesToSlideSpec(images, { title = "Image deck" } = {}) {
           position: { x: 0, y: 0, w: 13.333, h: 7.5 },
         },
       ],
-      notes: "Image-first slide. Main content may not be deeply editable.",
+      notes: noteFromImageInput(imageInput) || "Image-first slide. Main content may not be deeply editable.",
     });
   }
 
@@ -77,7 +78,7 @@ export async function pngManifestToSlideSpec(manifest, { manifestPath, title = "
     if (!(await isFile(resolved))) {
       throw new Error(`PNG manifest item for page ${page} does not exist: ${resolved}`);
     }
-    images.push({ ...item, page: Number(page), path: resolved });
+    images.push({ ...item, page: Number(page), path: resolved, notes: speakerNotesFromManifestItem(item) });
   }
 
   images.sort((a, b) => a.page - b.page);
@@ -85,7 +86,7 @@ export async function pngManifestToSlideSpec(manifest, { manifestPath, title = "
     throw new Error("PNG manifest requires at least one generated PNG item");
   }
 
-  return imagesToSlideSpec(images.map((item) => item.path), { title });
+  return imagesToSlideSpec(images, { title });
 }
 
 function normalizePngManifest(manifest) {
@@ -94,4 +95,16 @@ function normalizePngManifest(manifest) {
   if (Array.isArray(manifest?.pages)) return manifest.pages;
   if (Array.isArray(manifest?.slides)) return manifest.slides;
   throw new Error("PNG manifest must be an array or contain items/pages/slides");
+}
+
+function noteFromImageInput(imageInput) {
+  if (!imageInput || typeof imageInput === "string") return "";
+  return speakerNotesFromManifestItem(imageInput);
+}
+
+function speakerNotesFromManifestItem(item = {}) {
+  const value = item.speaker_notes ?? item.speakerNotes ?? item.notes ?? item.remarks ?? item.presenter_notes ?? item["备注"];
+  if (value === null || value === undefined) return "";
+  if (Array.isArray(value)) return value.map((entry) => String(entry).trim()).filter(Boolean).join("\n");
+  return String(value).trim();
 }
