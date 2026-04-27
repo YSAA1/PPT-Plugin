@@ -23,6 +23,9 @@ Stop and report the blocker when:
 - protocol is unconfirmed;
 - a generated page is missing;
 - a page output is not PNG;
-- visual QA fails without manual override note;
+- visual QA has hard-blocker failures;
+- visual QA has overrideable failures without a manual override note;
 - `strict_embed` evidence was altered;
 - final PPTX QA does not show one picture per slide and zero text overlays.
+
+Manual override MUST NOT bypass missing PNG, non-PNG, placeholder PNG, tiny PNG, missing `strict_embed` references, or `strict_embed` `reference_fidelity=fail`.

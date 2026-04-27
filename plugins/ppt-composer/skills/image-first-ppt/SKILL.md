@@ -35,11 +35,11 @@ MUST satisfy all rules:
 
 Execute in this exact order. Do not skip forward.
 
-1. Clarify missing requirements.
+1. Requirement Gate: before creating `deck-protocol.json`, all required fields below MUST be known or explicitly marked "user does not care"; if any required field is missing, ask only for the missing fields and STOP.
 2. Create `deck-protocol.json`. Read [references/protocol.md](references/protocol.md).
 3. Validate `deck-protocol.json`.
-4. Patch revisions only through protocol patch tools when possible.
-5. Present the protocol summary and wait for explicit confirmation. This is the Protocol Confirmation Gate.
+4. Patch revisions only through protocol patch tools. If patch tools are unavailable, record the reason, edit the protocol directly, and immediately rerun `validate-deck-protocol`.
+5. Present the protocol summary and wait for explicit protocol confirmation. This is the Protocol Confirmation Gate.
 6. After confirmation, generate final full-slide PNGs directly with Codex image generation. Read [references/image-generation-workers.md](references/image-generation-workers.md).
 7. Track page status in `imagegen-jobs.json`.
 8. Run deterministic `visual-qa` to check whether the generated PNG files are structurally assembleable. Read [references/manifest-visual-qa.md](references/manifest-visual-qa.md).
@@ -52,22 +52,26 @@ Hard stop conditions:
 
 - If protocol is not confirmed, STOP before image generation.
 - If any page lacks a real PNG, STOP before manifest creation.
-- If `visual-qa` status is `fail`, STOP before assembly unless a manual override note exists.
+- If `visual-qa` status is `fail`, STOP before assembly. Manual override is allowed only for overrideable review findings, never for missing/non-PNG/placeholder/tiny/strict_embed fidelity failures.
 - If final PPTX QA does not show one picture per slide and zero text overlays, STOP and report failure.
 
-## Clarification Fields
+## Requirement Gate
 
 Collect these before drafting a protocol. Ask only for missing items. Do not infer hard constraints such as logo, required wording, page count, or strict evidence from unrelated files.
 
-- language
-- deck type, such as academic report, product pitch, class presentation, business proposal, paper summary, or teaching deck
-- target audience
-- page-count range or exact page count
-- visual style
-- aspect ratio, defaulting to 16:9 only if the user does not care
-- output directory and final PPTX filename
-- reference file paths or uploaded files
-- required wording, logo, color, data, citation, or exclusion constraints
+- Required: language.
+- Required: deck type, such as academic report, product pitch, class presentation, business proposal, paper summary, or teaching deck.
+- Required: target audience.
+- Required: page-count range or exact page count.
+- Required: visual style.
+- Required: aspect ratio; use 16:9 only when the user says they do not care.
+- Required: output directory and final PPTX filename.
+- Required: reference file paths/uploaded files OR an explicit "no references, generate from brief only" confirmation.
+- Required: required wording, logo, color, data, citation, and exclusion constraints OR explicit "none".
+
+Go condition: every required item is known or explicitly waived.
+Stop condition: any required item is unknown. Do not create `deck-protocol.json`.
+Protocol confirmation condition: only an explicit approval such as "确认协议", "按此 protocol 生成", "开始生图", or equivalent clear approval authorizes image generation. Ambiguous replies such as "继续", "ok", or "不错" do not authorize image generation unless they clearly refer to the protocol summary.
 
 If no uploaded file or explicit reference path exists, MUST NOT scan the current project. Continue from the user brief.
 

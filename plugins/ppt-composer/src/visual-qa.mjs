@@ -10,6 +10,17 @@ const VISUAL_REVIEW_DIMENSIONS = [
   "text_legibility",
   "artifact_quality",
 ];
+const HARD_BLOCKER_CODES = new Set([
+  "missing_job",
+  "job_not_ready",
+  "missing_png_path",
+  "missing_png",
+  "non_png",
+  "tiny_png",
+  "placeholder_png",
+  "strict_embed_missing_reference",
+  "strict_embed_reference_fidelity_failed",
+]);
 
 export async function runVisualQa({ protocol, jobs, baseDir = process.cwd(), manualOverrideNote = "" } = {}) {
   if (!protocol) throw new Error("visual QA requires protocol");
@@ -29,6 +40,10 @@ export async function runVisualQa({ protocol, jobs, baseDir = process.cwd(), man
     }
     visualReviewPages.push(visualReviewSummary(page, job));
     if (!PNG_READY_STATES.has(job.status)) {
+      if (visualReviewEnabled && ["rejected", "revision_requested"].includes(job.status)) {
+        addVisualGateFinding(visualFindings, page, job, visualReviewEnabled);
+        continue;
+      }
       deterministicFindings.push(fail(
         page.page,
         "job_not_ready",
@@ -78,10 +93,11 @@ export async function runVisualQa({ protocol, jobs, baseDir = process.cwd(), man
   }
 
   const hasFail = findings.some((finding) => finding.level === "fail");
+  const hardFailures = findings.filter((finding) => finding.level === "fail" && HARD_BLOCKER_CODES.has(finding.code));
   return {
     kind: "ppt-composer-visual-qa",
     version: "0.1",
-    status: hasFail && !manualOverrideNote ? "fail" : "pass",
+    status: hardFailures.length || (hasFail && !manualOverrideNote) ? "fail" : "pass",
     checkedAt: new Date().toISOString(),
     summary: {
       pages: (protocol.pages || []).length,
@@ -90,6 +106,10 @@ export async function runVisualQa({ protocol, jobs, baseDir = process.cwd(), man
       warnings: findings.filter((finding) => finding.level === "warn").length,
       deterministicFailures: deterministicFindings.filter((finding) => finding.level === "fail").length,
       visualReviewFailures: visualFindings.filter((finding) => finding.level === "fail").length,
+      hardFailures: hardFailures.length,
+      overrideableFailures: findings.filter((finding) => (
+        finding.level === "fail" && !HARD_BLOCKER_CODES.has(finding.code)
+      )).length,
     },
     deterministicFindings,
     visualReview: {

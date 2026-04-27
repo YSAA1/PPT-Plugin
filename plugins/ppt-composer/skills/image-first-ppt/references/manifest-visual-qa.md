@@ -52,8 +52,10 @@ Visual QA activation:
 
 - Default: do not enable manual visual review. Deterministic `visual-qa` still checks PNG existence, format, dimensions, placeholder markers, and `strict_embed` reference binding.
 - Enable visual review only when the user asks for visual QA, strict review, consistency checking, or protocol-execution checking.
+- Once visual review is enabled, set `visualReview.enabled=true`; generated pages MUST NOT go directly to manifest.
 - When visual review is enabled, `png-manifest.json` MUST wait until every page status is `accepted`.
 - Without visual review, `png-manifest.json` may use `generated` or `accepted` jobs after deterministic QA passes.
+- Manual override may only bypass overrideable review findings. It MUST NOT bypass missing PNG, non-PNG, placeholder PNG, tiny PNG, missing `strict_embed` references, or `strict_embed` `reference_fidelity=fail`.
 
 Allowed page states include:
 

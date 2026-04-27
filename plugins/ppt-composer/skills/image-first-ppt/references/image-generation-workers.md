@@ -29,7 +29,10 @@ Leader must split work as follows:
 
 - 1 page: the leader may generate directly.
 - 2-6 pages: use the leader directly or at most 2 concurrent subagents unless the user explicitly prioritizes speed over local resource use.
-- 7+ pages: use at most 6 concurrent subagents by default; use fewer when local MCP/startup load is already high.
+- 7+ pages: MUST dispatch image-generation subagents unless spawn is unavailable, blocked, or a spawn attempt fails.
+- 7-12 pages: use 5-6 concurrent workers by default; assign 1-2 consecutive pages per worker, for example 10 pages -> `2+2+2+2+1+1` or `2+2+2+2+2`.
+- 13+ pages: use at most 6 concurrent workers; assign consecutive ranges that fit the wait budget.
+- Local MCP/startup load may reduce worker count but MUST NOT reduce it to zero for 7+ pages unless spawn is unavailable, blocked, or a spawn attempt fails.
 - Each page still requires an independent PNG file.
 
 Subagent runtime and model rules:
@@ -48,7 +51,7 @@ Shared context rules:
 
 - Before spawning workers, the leader MUST create one shared deck generation context from the confirmed protocol: deck title, audience, aspect ratio, global style, palette, typography, logo/template asset ids, page list, global negative rules, QA acceptance rules, and asset index.
 - `imagegen-jobs.json` MUST contain a `style_lock` object. Treat that object as the canonical shared visual contract for all image-generation and visual-review workers.
-- `style_lock` SHOULD include stable visual fields for layout density, font/size tendency, palette, chart style, margins/whitespace, and forbidden items.
+- `style_lock` MUST include stable visual fields for layout density, font/size tendency, palette, chart style, margins/whitespace, and forbidden items.
 - Every worker MUST receive the exact same `style_lock` plus only its assigned page protocol slice and relevant reference asset paths.
 - MUST NOT rely on inherited chat history as the only consistency mechanism.
 - Forked chat history is supplemental only. If fork history fails, is unavailable, or differs between workers, consistency MUST still come from the explicit `style_lock`.
@@ -65,6 +68,7 @@ Spawn call rules:
 - If role-less forked spawn fails, or if a role/reasoning override is required by the runtime, MUST omit `fork_context`; write the shared deck generation context and complete task context into `message` or `items`.
 - The context-packet prompt MUST include the same `style_lock` JSON used by forked workers. Do not shorten, paraphrase, or rebuild the style contract per worker.
 - If subagent spawning is unavailable, blocked, or fails, the leader MAY fall back to direct generation, but MUST record the reason in `imagegen-jobs.json` notes or the final handoff. Silent fallback is FORBIDDEN.
+- For 7+ pages, fallback to zero workers is allowed only after a concrete spawn unavailable/blocked/failed condition is observed and recorded.
 - The leader MUST wait for subagent results or failure status before creating `png-manifest.json`.
 
 Spawn call guardrail:

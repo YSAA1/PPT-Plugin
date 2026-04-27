@@ -86,8 +86,11 @@ Protocol patch rules:
 - MUST use `protocol-bind-asset` to bind references to pages.
 - MUST use `protocol-update-page` to change a page claim, prompt, negative prompt, output path, or content inputs.
 - MUST use `protocol-set-fidelity` to change fidelity.
+- If patch tools are unavailable, direct JSON edits are allowed only after recording the tool blocker and MUST be followed immediately by `validate-deck-protocol`.
 - MUST reject duplicate asset ids, unknown page numbers, unknown asset ids, and illegal fidelity values.
 - MUST pretty-print JSON after patching.
 - MUST preserve `version: "0.1"` and additive compatibility.
 
 Before asking for confirmation, present the title, page count, aspect ratio, global visual style, page-by-page claims, evidence bindings, fidelity modes, prompts, negative prompts, and output filenames. Then stop until the user explicitly confirms.
+
+Explicit confirmation means the user clearly approves the protocol, for example "确认协议", "按此 protocol 生成", "开始生图", or an equivalent clear approval. Ambiguous replies such as "继续", "ok", or "不错" do not authorize image generation unless they clearly refer to the protocol summary.

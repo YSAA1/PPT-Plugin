@@ -209,12 +209,22 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(skillSource, /references\/manifest-visual-qa\.md/i);
   assert.match(skillSource, /references\/tools-and-failures\.md/i);
   assert.match(skillSource, /deck-protocol\.json/i);
+  assert.match(skillSource, /Requirement Gate/i);
+  assert.match(skillSource, /ask only for the missing fields and STOP/i);
+  assert.match(skillSource, /Stop condition: any required item is unknown/i);
   assert.match(skillSource, /Protocol Confirmation Gate/i);
+  assert.match(skillSource, /Ambiguous replies such as "继续", "ok", or "不错" do not authorize image generation/i);
+  assert.match(protocolReference, /Ambiguous replies such as "继续", "ok", or "不错" do not authorize image generation/i);
+  assert.match(skillSource, /Patch revisions only through protocol patch tools/i);
+  assert.match(protocolReference, /direct JSON edits are allowed only after recording the tool blocker/i);
   assert.match(workerReference, /parallelism is worth the local startup cost/i);
   assert.match(workerReference, /subagents may initialize the same plugin MCP servers as the leader/i);
   assert.match(workerReference, /Do not spawn many image workers/i);
   assert.match(workerReference, /2-6 pages: use the leader directly or at most 2 concurrent subagents/i);
-  assert.match(workerReference, /7\+ pages: use at most 6 concurrent subagents by default/i);
+  assert.match(workerReference, /7\+ pages: MUST dispatch image-generation subagents/i);
+  assert.match(workerReference, /7-12 pages: use 5-6 concurrent workers by default/i);
+  assert.match(workerReference, /10 pages -> `2\+2\+2\+2\+1\+1` or `2\+2\+2\+2\+2`/i);
+  assert.match(workerReference, /MUST NOT reduce it to zero for 7\+ pages/i);
   assert.match(workerReference, /Estimate each subagent's runtime as `assigned_page_count \* per_image_budget`/i);
   assert.match(workerReference, /wait at least 3 minutes for a one-page worker/i);
   assert.match(workerReference, /If a page range would exceed the maximum wait time, split the range/i);
@@ -226,6 +236,7 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(workerReference, /Forked chat history is supplemental only/i);
   assert.match(workerReference, /A worker prompt that does not include the `style_lock` is invalid/i);
   assert.match(workerReference, /Every worker MUST receive the exact same `style_lock`/i);
+  assert.match(workerReference, /`style_lock` MUST include stable visual fields/i);
   assert.match(workerReference, /MUST NOT rely on inherited chat history as the only consistency mechanism/i);
   assert.match(workerReference, /MUST NOT call `spawn_agent` with `fork_context: true` when also setting `agent_type`/i);
   assert.match(workerReference, /Default shape is the lightweight context packet/i);
@@ -239,6 +250,7 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(workerReference, /Save or return the real generated PNG artifact for each page/i);
   assert.match(workerReference, /Leader MUST NOT treat a subagent response as successful unless it includes a real generated PNG path/i);
   assert.match(workerReference, /Silent fallback is FORBIDDEN/i);
+  assert.match(workerReference, /fallback to zero workers is allowed only after a concrete spawn unavailable\/blocked\/failed condition is observed/i);
   assert.match(workerReference, /MUST wait for subagent results or failure status before creating `png-manifest\.json`/i);
   assert.match(workerReference, /assigned page protocol slice/i);
   assert.match(protocolReference, /optional `speaker_notes`/i);
@@ -262,6 +274,9 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(qaReference, /text_legibility: Is all visible slide text readable/i);
   assert.match(qaReference, /artifact_quality: Are there obvious generated-image defects/i);
   assert.match(qaReference, /The leader owns deterministic QA, manifest gating/i);
+  assert.match(qaReference, /Once visual review is enabled, set `visualReview\.enabled=true`/i);
+  assert.match(qaReference, /Manual override may only bypass overrideable review findings/i);
+  assert.match(toolsReference, /Manual override MUST NOT bypass missing PNG, non-PNG, placeholder PNG, tiny PNG/i);
   assert.match(toolsReference, /pptx_reference_intake/i);
   assert.match(toolsReference, /parse_paper_local/i);
   assert.match(toolsReference, /assemble_image_ppt/i);
@@ -782,6 +797,23 @@ test('imagegen jobs gate manifest creation and visual QA blocks bad PNGs', async
     runCli(['visual-qa', '--protocol', protocolPath, '--jobs', badJobsPath, '--out', path.join(outDir, 'bad-qa.json')]),
     /tiny_png/,
   );
+  await assert.rejects(
+    runCli([
+      'visual-qa',
+      '--protocol',
+      protocolPath,
+      '--jobs',
+      badJobsPath,
+      '--out',
+      path.join(outDir, 'bad-qa-override.json'),
+      '--manual-override-note',
+      'Do not block draft assembly.',
+    ]),
+    /tiny_png/,
+  );
+  const badOverride = JSON.parse(await readFile(path.join(outDir, 'bad-qa-override.json'), 'utf8'));
+  assert.equal(badOverride.status, 'fail');
+  assert.equal(badOverride.summary.hardFailures, 1);
 });
 
 test('imagegen visual review gates accepted pages and preserves superseded attempts', async () => {
