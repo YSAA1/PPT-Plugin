@@ -124,6 +124,32 @@ npm run doctor -- --create-env-template
 
 doctor 会检查 `uvx`、MCP 超时、PDF 回退图片能力和 `MINERU_API_TOKEN`。没有 token 时 MinerU 会使用 Flash/free 模式；小 PDF 可以用，但大文件和真正提取图表/图片需要 token。把 token 填到 doctor 提示的 env 文件后，重启 Codex。
 
+### 设置 MinerU API token
+
+如果你准备用 PPT Composer 处理 PDF、Office 文档、扫描件或参考图片，这一步强烈建议先做。PPT Composer 没有 token 也能运行，但 MinerU 会退回 Flash/free 模式：额度更低，结果偏 Markdown，真正的图片/图表提取可能不可用。做科研汇报、论文解读、严格保留参考图表的 deck 时，第一次正式使用前就应该创建并配置 MinerU API token。
+
+请把 token 放进私有 env 文件，不要发到对话里，也不要提交到 Git。
+
+1. 在你的 MinerU 账号里创建 API token。
+2. 运行 doctor 并创建 env 模板：
+
+   ```bash
+   npm run doctor -- --create-env-template
+   ```
+
+3. 打开 doctor 输出的 env 文件路径，填写：
+
+   ```env
+   MINERU_API_TOKEN=your_mineru_api_token_here
+   ```
+
+   `MINERU_TOKEN` 也兼容识别，但推荐统一使用 `MINERU_API_TOKEN`。
+
+4. 重启 Codex 或新开一个 Codex 线程，让 MCP server 继承新的环境变量。
+5. 再运行一次 `运行 PPT Composer doctor。`，确认 `mineru_token` 为 `ok`，模式为 `full_api`。
+
+如果你是从 Codex plugin marketplace 安装，env 文件通常在 doctor 显示的插件缓存路径下，例如 `~/.codex/plugins/cache/.../ppt-composer/<version>/.env`。如果你习惯集中管理密钥，也可以用 `PPT_COMPOSER_ENV_FILE` 指向另一个私有 env 文件。
+
 ### 从本地 clone 安装
 
 ```bash
