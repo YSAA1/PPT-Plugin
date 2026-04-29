@@ -114,9 +114,11 @@ codex plugin marketplace add YSAA1/PPT-Plugin
 运行 PPT Composer doctor。
 ```
 
-或者在已安装插件目录运行：
+或者在已安装插件目录运行。下面这些 `npm run ...` 命令必须在 PPT Composer
+的 npm 包目录里执行，不能在任意目录直接运行：
 
 ```bash
+cd <plugin_root>
 npm run prewarm
 npm run prewarm:mineru
 npm run doctor -- --create-env-template
@@ -131,11 +133,27 @@ doctor 会检查 `uvx`、MCP 超时、PDF 回退图片能力和 `MINERU_API_TOKE
 请把 token 放进私有 env 文件，不要发到对话里，也不要提交到 Git。
 
 1. 在你的 MinerU 账号里创建 API token。
-2. 运行 doctor 并创建 env 模板：
+2. 在 PPT Composer 包目录里创建 env 模板。如果你使用本地 clone，可以在仓库根目录运行：
 
    ```bash
+   npm --prefix plugins/ppt-composer run doctor -- --create-env-template
+   ```
+
+   如果你是从 Codex plugin marketplace 安装，先在 Codex 里问：
+
+   ```text
+   运行 PPT Composer doctor。
+   ```
+
+   然后复制输出里的 `plugin_root` 路径，再运行：
+
+   ```bash
+   cd <plugin_root>
    npm run doctor -- --create-env-template
    ```
+
+   如果在 home 目录、上层工作目录，或其他没有 `package.json` 的目录直接运行
+   `npm run doctor`，就会出现 `Could not read package.json` 这类错误。
 
 3. 打开 doctor 输出的 env 文件路径，填写：
 
