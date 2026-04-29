@@ -340,6 +340,9 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.ok(mcpConfig.mcpServers['ppt-render-mcp'].args.includes('./scripts/run-ppt-render-mcp.mjs'));
   assert.equal(mcpConfig.mcpServers['mineru-open-mcp'].cwd, '.');
   assert.equal(mcpConfig.mcpServers['ppt-render-mcp'].cwd, '.');
+  assert.equal(mcpConfig.mcpServers['mineru-open-mcp'].startup_timeout_sec, 120);
+  assert.equal(mcpConfig.mcpServers['mineru-open-mcp'].tool_timeout_sec, 900);
+  assert.equal(mcpConfig.mcpServers['ppt-render-mcp'].tool_timeout_sec, 300);
 
   const packageJson = JSON.parse(await readFile(path.join(pluginRoot, 'package.json'), 'utf8'));
   assert.equal(packageJson.scripts.prewarm, 'node ./scripts/prewarm-deps.mjs');

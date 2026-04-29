@@ -13,7 +13,8 @@
       "env_vars": [
         "MINERU_API_TOKEN"
       ],
-      "startup_timeout_sec": 120
+      "startup_timeout_sec": 120,
+      "tool_timeout_sec": 900
     },
     "ppt-render-mcp": {
       "command": "node",
@@ -21,7 +22,8 @@
         "./scripts/run-ppt-render-mcp.mjs"
       ],
       "cwd": ".",
-      "startup_timeout_sec": 120
+      "startup_timeout_sec": 120,
+      "tool_timeout_sec": 300
     }
   }
 }
