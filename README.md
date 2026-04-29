@@ -114,9 +114,11 @@ In Codex, ask:
 Run PPT Composer doctor.
 ```
 
-Or from the installed plugin root:
+Or from the installed plugin root. These `npm run ...` commands must be run in
+the PPT Composer package directory, not from an arbitrary folder:
 
 ```bash
+cd <plugin_root>
 npm run prewarm
 npm run prewarm:mineru
 npm run doctor -- --create-env-template
@@ -131,11 +133,29 @@ This step is strongly recommended if you plan to use PPT Composer with PDFs, Off
 Use a private env file; do not paste the token into prompts or commit it to Git.
 
 1. Create an API token in your MinerU account.
-2. Run doctor with env-template creation:
+2. Create the env template from the PPT Composer package directory. If you are
+   using a local clone, run this from the repository root:
 
    ```bash
+   npm --prefix plugins/ppt-composer run doctor -- --create-env-template
+   ```
+
+   If you installed from the Codex plugin marketplace, first ask Codex:
+
+   ```text
+   Run PPT Composer doctor.
+   ```
+
+   Then copy the reported `plugin_root` path and run:
+
+   ```bash
+   cd <plugin_root>
    npm run doctor -- --create-env-template
    ```
+
+   Running `npm run doctor` from another directory, such as your home folder or
+   a parent workspace without `package.json`, will fail with `Could not read
+   package.json`.
 
 3. Open the env file path reported by doctor and fill:
 
