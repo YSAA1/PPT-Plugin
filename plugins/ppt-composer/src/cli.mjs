@@ -29,7 +29,7 @@ Usage:
   ppt-composer from-images --out <slide-spec.json> --images <img1> <img2> ...
   ppt-composer assemble-image-ppt --manifest <png-manifest.json> --out <deck.pptx> [--spec-out <slide-spec.json>] [--title <title>]
   ppt-composer parse-paper --input <paper.pdf|paper.md> --out-dir <parse-dir> [--lang en|ch]
-  ppt-composer reference-intake --out-dir <work-dir> --protocol-out <deck-protocol.json> [--inputs <ref1> <ref2> ...] [--title <title>] [--pages 8]
+  ppt-composer reference-intake --out-dir <work-dir> --protocol-out <deck-protocol.json> [--inputs <markdown-or-assets> ...] [--title <title>] [--pages 8]
   ppt-composer validate-deck-protocol --protocol <deck-protocol.json> [--require-generated-png]
   ppt-composer protocol-review --protocol <deck-protocol.json> --out <deck-protocol.review.md>
   ppt-composer protocol-add-asset --protocol <deck-protocol.json> --asset <asset-json> [--audit-note <note>]

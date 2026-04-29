@@ -16,7 +16,7 @@ Prefer MCP as the internal tool layer when available. Keep MCP as the internal t
 CLI equivalents live under `node plugins/ppt-composer/src/cli.mjs`.
 CLI protocol/job tools include `reference-intake`, `validate-deck-protocol`, `protocol-review`, `imagegen-jobs-create`, `imagegen-jobs-backfill`, `imagegen-jobs-review`, `imagegen-jobs-revise`, `imagegen-jobs-status`, `imagegen-jobs-to-manifest`, `visual-qa`, and `asset-index-create`.
 
-MinerU document parsing is optional. If `mineru-open-mcp` returns `setup_required: true`, treat only MinerU parsing as blocked: install `uv/uvx`, run `npm run prewarm:mineru` from the installed plugin root, restart Codex, and continue using `ppt-render-mcp` for manifest validation, PPTX assembly, and QA while parsing is unavailable.
+MinerU document parsing is optional but is the preferred path for PDF, Office, and scanned/image references. Use `mineru-open-mcp.parse_documents` before `reference_intake` for those files so the intake step receives Markdown plus returned image paths. With `MINERU_API_TOKEN`, these should be MinerU-extracted figures/images; without a token, Flash mode is Markdown-only upstream, so the plugin wrapper must still return local `image_paths` for PDFs/images when possible via page-image/input-image fallback. Do not rely on a user's private `mineru-pdf-to-md` skill as the default plugin path. If `mineru-open-mcp` returns `setup_required: true`, treat only MinerU parsing as blocked: install `uv/uvx`, run `npm run prewarm:mineru` from the installed plugin root, restart Codex, and continue using `ppt-render-mcp` for manifest validation, PPTX assembly, and QA while parsing is unavailable.
 
 ## Failure Conditions
 

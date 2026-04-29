@@ -352,6 +352,14 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   );
   assert.match(mineruWrapper, /image_paths/);
   assert.match(mineruWrapper, /zip_url/);
+  assert.match(mineruWrapper, /md_path\.write_text/);
+  assert.match(mineruWrapper, /image_dir\.mkdir\(parents=True, exist_ok=True\)/);
+  assert.match(mineruWrapper, /image_error/);
+  assert.match(mineruWrapper, /Keep the document parse successful/);
+  assert.match(mineruWrapper, /pdf_page_render_fallback/);
+  assert.match(mineruWrapper, /input_image/);
+  assert.match(mineruWrapper, /extract_mod\.extract_sources = _extract_sources_with_source_tracking/);
+  assert.match(mineruWrapper, /tools_mod\.extract_sources = _extract_sources_with_source_tracking/);
 
   const nodeMineruWrapper = await readFile(
     path.join(pluginRoot, 'scripts/run-mineru-open-mcp.mjs'),
@@ -360,6 +368,7 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(nodeMineruWrapper, /mineru-open-mcp-with-images\.py/);
   assert.match(nodeMineruWrapper, /prewarm:mineru/);
   assert.match(nodeMineruWrapper, /buildPluginEnv/);
+  assert.match(nodeMineruWrapper, /socksio/);
 
   const nodeRenderWrapper = await readFile(
     path.join(pluginRoot, 'scripts/run-ppt-render-mcp.mjs'),
@@ -379,6 +388,7 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   );
   assert.match(prewarmScript, /--include-mineru/);
   assert.match(prewarmScript, /mineru-open-mcp/);
+  assert.match(prewarmScript, /socksio/);
   assert.match(prewarmScript, /npmCommand/);
 });
 

@@ -1,16 +1,7 @@
 import { copyFile, mkdir, readdir, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { exists } from "./lib.mjs";
-
-const DEFAULT_WRAPPER = path.join(
-  process.env.CODEX_HOME || path.join(homedir(), ".codex"),
-  "skills",
-  "mineru-pdf-to-md",
-  "scripts",
-  process.platform === "win32" ? "run_mineru.cmd" : "run_mineru.sh",
-);
 
 export async function parsePaper({ inputPath, outDir, lang = "en", mode = "auto", mineruWrapper, dryRun = false }) {
   if (!(await exists(inputPath))) {
@@ -36,7 +27,14 @@ export async function parsePaper({ inputPath, outDir, lang = "en", mode = "auto"
     return { bundle: bundlePath, ...bundle };
   }
 
-  const wrapper = mineruWrapper || DEFAULT_WRAPPER;
+  if (!mineruWrapper) {
+    throw new Error([
+      "PDF/Office/image parsing should use mineru-open-mcp.parse_documents first, then pass the saved Markdown/images into reference_intake.",
+      "For CLI-only local parsing, pass --mineru-wrapper explicitly."
+    ].join(" "));
+  }
+
+  const wrapper = mineruWrapper;
   if (!(await exists(wrapper))) {
     throw new Error(`MinerU wrapper not found: ${wrapper}`);
   }
