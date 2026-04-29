@@ -1,6 +1,6 @@
 {
   "name": "ppt-composer",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Image-first PPT generation with MCP-backed parsing and assembly tools: create one finished PNG per slide and assemble those PNGs into PowerPoint decks.",
   "author": {
     "name": "PPT Composer Maintainers",

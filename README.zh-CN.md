@@ -80,7 +80,7 @@ ppt-composer:image-first-ppt
 - 每页标题和核心观点；
 - 每页绑定的证据；
 - 每页最终生图 prompt；
-- 可选的演讲者备注；
+- 默认生成的演讲者备注；
 - 每页输出 PNG 路径。
 
 页面通过 asset id 引用资料：
@@ -116,7 +116,9 @@ ppt-composer:image-first-ppt
 
 不要把原始图片路径直接写进 `content_inputs`。真实文件路径应该放在 `assets`，页面里只引用对应的 asset id。
 如果用户提供了参考文件，协议必须先把解析/本地化后的资料写进 `assets`，并且至少有一页通过 asset id 绑定这些资料，否则还不能进入确认协议和生图阶段。
-使用 `speaker_notes` 写演讲者备注；它会进入 PowerPoint 备注页，不会渲染成页面可见文字。已有协议里的 `notes`、`remarks`、`presenter_notes` 或 `备注` 会作为兼容别名读取。
+使用 `speaker_notes` 写演讲者备注；生成协议时默认会为每页添加备注。备注应该是面向目标听众的讲稿提示，说明这一页该怎么讲、为什么重要、如何解释证据和如何过渡，而不是一句很短的标签。它会进入 PowerPoint 备注页，不会渲染成页面可见文字。已有协议里的 `notes`、`remarks`、`presenter_notes` 或 `备注` 会作为兼容别名读取。
+
+整套 deck 还会使用统一的页码/页脚策略。asset id、文件名、文件路径、`source:` 标签、协议字段名、解析器元数据等内部信息不能出现在图片里的可见文字中。
 
 PPT Composer 会把协议修改和生成状态保存在内部文件里：
 

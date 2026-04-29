@@ -20,7 +20,7 @@
 - deck metadata and style;
 - localized reference assets by id;
 - one page record per slide;
-- `content_inputs`, `reference_asset_ids`, `fidelity`, `final_image_prompt`, `negative_prompt`, `output_png`, and optional `speaker_notes`.
+- `content_inputs`, `reference_asset_ids`, `fidelity`, `final_image_prompt`, `negative_prompt`, `output_png`, and default `speaker_notes`.
 
 Use only these fidelity modes:
 
@@ -72,7 +72,7 @@ Each page MUST include exactly these required fields:
 - `final_image_prompt`
 - `negative_prompt`
 - `output_png`
-- optional `speaker_notes`: speaker/presenter notes written to PPT notes, not visible slide text
+- `speaker_notes`: default speaker/presenter talk track written to PPT notes, not visible slide text
 - `free_generation: true` only when a reference-grounded page intentionally has no evidence binding
 
 Speaker notes rules:
@@ -80,7 +80,16 @@ Speaker notes rules:
 - Use `speaker_notes` as the canonical protocol key.
 - Accept legacy aliases `notes`, `remarks`, `presenter_notes`, and `备注` when user-authored protocols already contain them.
 - Speaker notes MUST NOT be rendered inside the PNG unless the user explicitly says they are visible slide text.
+- Generated protocols SHOULD include `speaker_notes` by default on every page unless the user explicitly opts out.
+- Speaker notes should be audience-specific talk tracks, not one-line labels. They should explain the page takeaway, why it matters to the stated audience, how to talk through the bound evidence, and how to transition to the next page.
 - Assembly MUST carry speaker notes from protocol -> `imagegen-jobs.json` -> `png-manifest.json` -> PPT speaker notes.
+
+Visual consistency and metadata rules:
+
+- The protocol/style MUST define one footer or page-number policy for the whole deck. Do not allow page numbers to appear randomly on only some pages.
+- Unless the user explicitly requests visible page numbers, either omit page numbers everywhere or use the same small bottom-right page/total footer consistently.
+- `final_image_prompt` and `negative_prompt` MUST forbid visible internal metadata: asset ids, filenames, file paths, `source:`, `source table`, `reference asset`, protocol field names, or parser labels.
+- Evidence ids and paths are for grounding only; they MUST NOT be copied into visible slide text.
 
 Protocol patch rules:
 

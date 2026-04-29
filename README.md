@@ -80,7 +80,7 @@ The final PPTX contains one full-slide PNG per page. Slide text, titles, charts,
 - page titles and claims;
 - evidence bindings;
 - per-page image prompts;
-- optional speaker notes;
+- default presenter notes;
 - output PNG paths.
 
 Pages reference assets by id:
@@ -116,7 +116,9 @@ Pages reference assets by id:
 
 Do not put raw image paths in `content_inputs`. Put files in `assets`, then reference their ids from pages.
 If reference files were provided, the protocol is not ready for confirmation until extracted/localized assets appear in `assets` and at least one reference-grounded page binds those asset ids.
-Use `speaker_notes` for presenter notes. It is carried into PowerPoint speaker notes and is not rendered as visible slide text. Existing protocols using `notes`, `remarks`, `presenter_notes`, or `备注` are accepted as aliases.
+Use `speaker_notes` for presenter notes. Generated protocols include presenter notes by default: they should be audience-specific talk tracks for how to explain the page, not one-line labels. Notes are carried into PowerPoint speaker notes and are not rendered as visible slide text. Existing protocols using `notes`, `remarks`, `presenter_notes`, or `备注` are accepted as aliases.
+
+Deck visuals also use one consistent page-number/footer policy. Internal metadata such as asset ids, filenames, file paths, `source:` labels, and protocol/parser field names must not appear as visible slide text.
 
 PPT Composer keeps protocol edits and generation state in internal files:
 

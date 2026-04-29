@@ -228,6 +228,9 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(skillSource, /Reference Asset Gate/i);
   assert.match(skillSource, /deck-protocol\.review\.md/i);
   assert.match(skillSource, /worker_dispatch\.assignments/i);
+  assert.match(skillSource, /speaker_notes.*by default/i);
+  assert.match(skillSource, /page-number\/footer policy/i);
+  assert.match(skillSource, /asset ids, filenames, paths, `source:` labels/i);
   assert.match(skillSource, /ask only for the missing fields and STOP/i);
   assert.match(skillSource, /Stop condition: any required item is unknown/i);
   assert.match(skillSource, /Protocol Confirmation Gate/i);
@@ -285,10 +288,17 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(workerReference, /fallback to zero workers is allowed only after a concrete spawn unavailable\/blocked\/failed condition is observed/i);
   assert.match(workerReference, /MUST wait for subagent results or failure status before creating `png-manifest\.json`/i);
   assert.match(workerReference, /assigned page protocol slice/i);
-  assert.match(protocolReference, /optional `speaker_notes`/i);
+  assert.match(protocolReference, /`speaker_notes`: default speaker\/presenter talk track/i);
+  assert.match(protocolReference, /Generated protocols SHOULD include `speaker_notes` by default/i);
+  assert.match(protocolReference, /audience-specific talk tracks/i);
+  assert.match(protocolReference, /Visual consistency and metadata rules/i);
+  assert.match(protocolReference, /Do not allow page numbers to appear randomly/i);
+  assert.match(protocolReference, /asset ids, filenames, file paths, `source:`/i);
   assert.match(protocolReference, /Speaker notes MUST NOT be rendered inside the PNG/i);
   assert.match(protocolReference, /protocol -> `imagegen-jobs\.json` -> `png-manifest\.json` -> PPT speaker notes/i);
   assert.match(workerReference, /Directly call Codex built-in image generation/i);
+  assert.match(workerReference, /page-number\/footer policy/i);
+  assert.match(workerReference, /Do not render internal metadata/i);
   assert.match(workerReference, /missing `OPENAI_API_KEY` does not mean built-in `image_gen` is unavailable/i);
   assert.match(workerReference, /generate-assets --provider codex.*prompt-sheet handoff/i);
   assert.match(skillSource, /prompt sheet.*finished slide/i);
@@ -633,6 +643,8 @@ test('reference-intake writes deck protocol from mixed local references', async 
     protocolPath,
     '--title',
     'Protocol Demo',
+    '--audience',
+    'lab reviewers',
     '--pages',
     '3',
   ]);
@@ -653,6 +665,9 @@ test('reference-intake writes deck protocol from mixed local references', async 
   assert.ok(protocol.assets.some((asset) => asset.type === 'source_image'));
   assert.ok(protocol.assets.some((asset) => asset.type === 'source_table' && asset.path.endsWith('.png')));
   assert.ok(protocol.pages.every((page) => page.final_image_prompt && page.negative_prompt && page.output_png.endsWith('.png')));
+  assert.ok(protocol.pages.every((page) => page.speaker_notes && page.speaker_notes.length > 120));
+  assert.ok(protocol.pages.every((page) => page.speaker_notes.includes('lab reviewers')));
+  assert.ok(protocol.pages.every((page) => /asset ids|source labels|protocol metadata/i.test(page.negative_prompt)));
 
   const validation = await runCli(['validate-deck-protocol', '--protocol', protocolPath]);
   assert.equal(validation.ok, true);
@@ -839,6 +854,10 @@ test('imagegen jobs gate manifest creation and visual QA blocks bad PNGs', async
   assert.match(jobsAfterCreate.style_lock.style.font_scale, /readable/);
   assert.match(jobsAfterCreate.style_lock.style.chart_style, /consulting\/research/);
   assert.match(jobsAfterCreate.style_lock.style.margins, /whitespace/);
+  assert.match(jobsAfterCreate.style_lock.style.page_number_policy, /consistent/i);
+  assert.match(jobsAfterCreate.style_lock.style.visible_text_policy, /asset ids/i);
+  assert.match(jobsAfterCreate.style_lock.format_contract.join(' '), /page number\/footer policy/i);
+  assert.match(jobsAfterCreate.style_lock.negative_contract.join(' '), /source labels/i);
   assert.equal(jobsAfterCreate.worker_dispatch.required, true);
   assert.equal(jobsAfterCreate.worker_dispatch.default_reasoning_effort, 'low');
   assert.equal(jobsAfterCreate.worker_dispatch.assignments.length, 6);
@@ -1225,6 +1244,10 @@ test('deck protocol validates references and drives visual-plan prompt slices', 
   assert.ok(visualPlan.requests.every((request) => request.protocolPage));
   assert.ok(visualPlan.requests.some((request) => request.fidelity === 'strict_embed'));
   assert.ok(visualPlan.requests.every((request) => /Fidelity mode:/i.test(request.prompt)));
+  assert.ok(visualPlan.requests.every((request) => /Page numbering policy:/i.test(request.prompt)));
+  assert.ok(visualPlan.requests.every((request) => /Do not render internal evidence labels/i.test(request.prompt)));
+  assert.ok(visualPlan.requests.every((request) => !/tbl-1:/i.test(request.prompt)));
+  assert.ok(visualPlan.requests.every((request) => !/Grounding evidence:.*source table/i.test(request.prompt)));
 
   const manifestResult = await runCli([
     'generate-assets',

@@ -24,6 +24,8 @@ export function createDeckProtocol({ mode = "brief_mode", deck = {}, style = {},
       logo_ids: style.logo_ids || [],
       palette: style.palette || [],
       typography: style.typography || "",
+      page_number_policy: style.page_number_policy || style.pageNumberPolicy || "consistent: either no page numbers, or the same small bottom-right page/total footer on every slide except a deliberate cover exemption",
+      visible_text_policy: style.visible_text_policy || style.visibleTextPolicy || "do not render asset ids, filenames, file paths, source labels, or protocol metadata as visible slide text",
     },
     assets,
     pages,
@@ -252,11 +254,13 @@ function visualPageFromProtocolPage(protocolPage, protocol, assetsById, index) {
   const tableEvidence = (protocolPage.content_inputs?.tables || [])
     .map((id) => assetsById.get(id))
     .filter(Boolean)
-    .map((asset) => `${asset.id}: ${asset.summary || asset.caption || "source table"}`);
+    .map((asset) => asset.summary || asset.caption || "table evidence");
   const imageEvidence = referenceAssets
     .filter((asset) => /image|logo/.test(asset.type || ""))
-    .map((asset) => `${asset.id}: ${asset.caption || asset.path || asset.type}`);
+    .map((asset) => asset.caption || asset.summary || "visual evidence");
   const evidence = [...textEvidence, ...tableEvidence, ...imageEvidence].filter(Boolean).slice(0, 8);
+  const pageNumberPolicy = protocol.style?.page_number_policy || protocol.style?.pageNumberPolicy || "Use one consistent footer/page-number policy across all pages.";
+  const visibleTextPolicy = protocol.style?.visible_text_policy || protocol.style?.visibleTextPolicy || "Never render asset ids, filenames, source labels, or protocol metadata as visible slide text.";
   const prompt = [
     "Use case: productivity-visual",
     "Asset type: finished full-slide 16:9 PowerPoint page image",
@@ -267,7 +271,10 @@ function visualPageFromProtocolPage(protocolPage, protocol, assetsById, index) {
     `Fidelity mode: ${protocolPage.fidelity}.`,
     protocol.style?.description ? `Style lock: ${protocol.style.description}` : null,
     evidence.length ? `Grounding evidence: ${evidence.join("; ")}.` : "Grounding evidence: no external evidence; use only the approved brief.",
+    `Page numbering policy: ${pageNumberPolicy}`,
+    `Visible text policy: ${visibleTextPolicy}`,
     "Text policy: no later PPT text overlay; all required visible text must be rendered inside this PNG.",
+    "Do not render internal evidence labels such as asset ids, filenames, file paths, 'source:', 'source table', 'reference asset', or protocol field names.",
     "If a referenced table PNG or source image is available, use it as visual evidence instead of inventing replacement data.",
     `Avoid: ${protocolPage.negative_prompt}`,
   ].filter(Boolean).join("\n");

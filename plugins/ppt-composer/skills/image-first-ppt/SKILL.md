@@ -88,6 +88,8 @@ If no uploaded file or explicit reference path exists, MUST NOT scan the current
 - `style_lock` in `imagegen-jobs.json` is the canonical visual consistency contract across workers.
 - `deck-protocol.review.md` is the human review version; chat summary alone is not enough for protocol confirmation.
 - `imagegen-jobs.json.worker_dispatch` is the canonical subagent dispatch plan for 7+ page decks.
+- Generated protocols add `speaker_notes` by default. Notes are presenter talk tracks customized to the audience, not one-sentence labels and not visible slide text.
+- A consistent page-number/footer policy and a visible-metadata ban are part of the visual contract. Do not let only some generated pages show page numbers, and never render asset ids, filenames, paths, `source:` labels, or parser/protocol metadata inside slide images.
 - 7+ confirmed pages do not require separate subagent wording from the user; protocol confirmation is enough authorization for bounded image workers.
 - Default subagent strategy is a lightweight context packet. Default subagent reasoning is `low`; escalate to `medium` only for complex evidence/fidelity pages. Forked context is optional and must not be combined with reasoning effort.
 - Visual review is explicit opt-in. Deterministic `visual-qa` still runs before assembly.

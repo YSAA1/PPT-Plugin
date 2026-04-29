@@ -274,13 +274,35 @@ function buildProtocolPages({ assets, pageCount, deck, protocolMode }) {
         `Create page ${pageNumber} as a complete finished full-slide 16:9 PPT image.`,
         `Main claim: ${claim}`,
         "Use a polished scientific-consulting layout with sparse readable labels.",
+        "Keep footer/page-number treatment consistent with the rest of the deck.",
+        "Do not render internal asset ids, file names, paths, source labels, or protocol metadata as visible slide text.",
       ].join(" "),
-      negative_prompt: "No separate PPT text overlay, no fake numbers, no fake logos, no watermark, no tiny unreadable text, no placeholder art.",
+      negative_prompt: "No separate PPT text overlay, no fake numbers, no fake logos, no watermark, no tiny unreadable text, no placeholder art, no visible asset ids, no file names, no file paths, no source labels, no protocol metadata.",
       output_png: `dist/slides/slide-${String(pageNumber).padStart(2, "0")}.png`,
+      speaker_notes: buildSpeakerNotes({ pageNumber, pageCount, title: pageNumber === 1 ? (deck.title || "Image-first deck") : `Page ${pageNumber}`, claim, audience: deck.audience, language: deck.language, text, table, image }),
       free_generation: protocolMode === "reference_grounded_mode" ? !(textIds.length || tableIds.length || imageIds.length || referenceIds.length) : true,
     });
   }
   return pages;
+}
+
+function buildSpeakerNotes({ pageNumber, pageCount, title, claim, audience = "", language = "zh", text = null, table = null, image = null }) {
+  const targetAudience = audience || (language === "en" ? "the audience" : "听众");
+  const evidence = table?.summary || table?.caption || image?.caption || text?.summary || text?.text || "";
+  if (language === "en") {
+    return [
+      `For ${targetAudience}, open this slide by stating the page takeaway in one sentence: ${claim}.`,
+      `Then explain why this point matters in the deck narrative instead of reading the visible slide text word for word.`,
+      evidence ? `Use the supporting material behind this page to make the claim concrete: ${evidence}.` : "Because this page is brief-driven, keep the explanation tied to the approved deck goal and avoid adding unsupported facts.",
+      `Close by connecting this page to the next step in the story, so slide ${pageNumber} of ${pageCount} feels like part of one continuous presentation.`,
+    ].join("\n");
+  }
+  return [
+    `面向${targetAudience}讲这一页时，先用一句话点明本页结论：${claim}。`,
+    "接着解释这个结论为什么放在这里，它和整份汇报主线的关系是什么，不要只是照读页面上的标题和标签。",
+    evidence ? `讲证据时结合本页绑定的资料展开：${evidence}。把它转化成听众能理解的含义，说明它如何支撑本页判断。` : "如果这一页主要来自 brief，就围绕已确认的目标和场景展开，不额外编造数据或引用。",
+    `最后用一句过渡收束，把第 ${pageNumber}/${pageCount} 页自然引到下一页，让听众知道接下来要看什么。`,
+  ].join("\n");
 }
 
 function extractMarkdownText(markdown) {
