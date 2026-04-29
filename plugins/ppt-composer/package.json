@@ -18,7 +18,8 @@
     "demo": "node ./src/cli.mjs render --spec ./examples/research-demo.spec.json --out ./dist/research-demo.pptx && node ./src/cli.mjs qa --pptx ./dist/research-demo.pptx --spec ./examples/research-demo.spec.json --out ./dist/research-demo.qa.json",
     "test:enhancement": "node --test ./tests/enhancement-regression.test.mjs",
     "smoke:markdown": "node ./src/cli.mjs from-markdown --input ./examples/outline.md --out ./dist/outline.spec.json --title \"Existing Content Deck\" && node ./src/cli.mjs render --spec ./dist/outline.spec.json --out ./dist/outline.pptx && node ./src/cli.mjs qa --pptx ./dist/outline.pptx --spec ./dist/outline.spec.json --out ./dist/outline.qa.json",
-    "smoke:images": "node ./src/cli.mjs from-images --out ./dist/image.spec.json --title \"Image First Demo\" --images ./examples/sample-visual.svg && node ./src/cli.mjs render --spec ./dist/image.spec.json --out ./dist/image.pptx && node ./src/cli.mjs qa --pptx ./dist/image.pptx --spec ./dist/image.spec.json --out ./dist/image.qa.json"
+    "smoke:images": "node ./src/cli.mjs from-images --out ./dist/image.spec.json --title \"Image First Demo\" --images ./examples/sample-visual.svg && node ./src/cli.mjs render --spec ./dist/image.spec.json --out ./dist/image.pptx && node ./src/cli.mjs qa --pptx ./dist/image.pptx --spec ./dist/image.spec.json --out ./dist/image.qa.json",
+    "doctor": "node ./src/cli.mjs doctor"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

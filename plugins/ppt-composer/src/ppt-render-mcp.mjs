@@ -23,11 +23,32 @@ import { runVisualQaFile } from "./visual-qa.mjs";
 import { pptxReferenceIntake } from "./pptx-reference-intake.mjs";
 import { createProtocolReview } from "./protocol-review.mjs";
 import { readJson, resolvePath } from "./lib.mjs";
+import { runComposerDoctor } from "./composer-doctor.mjs";
 
 const server = new McpServer({
   name: "ppt-render-mcp",
   version: "0.1.0",
 });
+
+
+server.registerTool(
+  "ppt_composer_doctor",
+  {
+    title: "PPT Composer Doctor",
+    description: "Check PPT Composer installation, MCP timeouts, uvx/MinerU readiness, token mode, and env-file setup guidance.",
+    inputSchema: {
+      createEnvTemplate: z.boolean().optional().describe("Create a private env template if it does not already exist."),
+      envPath: z.string().optional().describe("Optional env template path when createEnvTemplate is true."),
+    },
+  },
+  async ({ createEnvTemplate, envPath }) => {
+    const result = await runComposerDoctor({
+      createEnvTemplate: Boolean(createEnvTemplate),
+      envPath,
+    });
+    return jsonToolResult(result);
+  },
+);
 
 server.registerTool(
   "render_pptx",

@@ -20,9 +20,11 @@ import { runVisualQaFile } from "./visual-qa.mjs";
 import { pptxReferenceIntake } from "./pptx-reference-intake.mjs";
 import { createProtocolReview } from "./protocol-review.mjs";
 import { readJson, resolvePath, writeJson } from "./lib.mjs";
+import { runComposerDoctor } from "./composer-doctor.mjs";
 
 const USAGE = `
 Usage:
+  ppt-composer doctor [--create-env-template] [--env-path <file>]
   ppt-composer render --spec <slide-spec.json> --out <deck.pptx>
   ppt-composer qa --pptx <deck.pptx> [--spec <slide-spec.json>] [--out <qa.json>]
   ppt-composer from-markdown --input <outline.md> --out <slide-spec.json> [--title <title>]
@@ -94,6 +96,15 @@ async function main() {
   const args = parseArgs(rest);
   if (!command || command === "help" || args.help) {
     process.stdout.write(USAGE);
+    return;
+  }
+
+  if (command === "doctor") {
+    const result = await runComposerDoctor({
+      createEnvTemplate: Boolean(args["create-env-template"]),
+      envPath: args["env-path"],
+    });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return;
   }
 

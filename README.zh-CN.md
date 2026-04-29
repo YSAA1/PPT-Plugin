@@ -106,6 +106,24 @@ codex plugin marketplace add YSAA1/PPT-Plugin
 
 安装后请**新开一个 Codex 线程**，让内置 skill 和 MCP server 被加载。如果插件列表或旧 Codex 会话已经打开过，测试前先重启 Codex。
 
+### 检查文档解析配置
+
+在 Codex 里直接问：
+
+```text
+运行 PPT Composer doctor。
+```
+
+或者在已安装插件目录运行：
+
+```bash
+npm run prewarm
+npm run prewarm:mineru
+npm run doctor -- --create-env-template
+```
+
+doctor 会检查 `uvx`、MCP 超时、PDF 回退图片能力和 `MINERU_API_TOKEN`。没有 token 时 MinerU 会使用 Flash/free 模式；小 PDF 可以用，但大文件和真正提取图表/图片需要 token。把 token 填到 doctor 提示的 env 文件后，重启 Codex。
+
 ### 从本地 clone 安装
 
 ```bash

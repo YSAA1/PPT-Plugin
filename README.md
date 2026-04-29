@@ -106,6 +106,24 @@ Choose **PPT Composer** and select **Install plugin**.
 
 After installing, **start a new Codex thread** so the bundled skill and MCP servers are loaded. If the plugin browser or an older Codex session was already open, restart Codex before testing the plugin.
 
+### Check document parsing setup
+
+In Codex, ask:
+
+```text
+Run PPT Composer doctor.
+```
+
+Or from the installed plugin root:
+
+```bash
+npm run prewarm
+npm run prewarm:mineru
+npm run doctor -- --create-env-template
+```
+
+The doctor reports whether `uvx`, MCP timeouts, PDF fallback, and `MINERU_API_TOKEN` are ready. Without a token, MinerU uses Flash/free mode; small PDFs can work, but large files and true figure extraction need a token. Put the token in the env file reported by doctor, then restart Codex.
+
 ### Install from a local clone
 
 ```bash

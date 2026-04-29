@@ -346,6 +346,7 @@ test('plugin exposes only the image-first-ppt skill', async () => {
 
   const packageJson = JSON.parse(await readFile(path.join(pluginRoot, 'package.json'), 'utf8'));
   assert.equal(packageJson.scripts.prewarm, 'node ./scripts/prewarm-deps.mjs');
+  assert.equal(packageJson.scripts.doctor, 'node ./src/cli.mjs doctor');
   assert.equal(packageJson.scripts['prewarm:mineru'], 'node ./scripts/prewarm-deps.mjs --include-mineru');
   assert.equal(packageJson.dependencies.jszip, '^3.10.1');
 
@@ -465,12 +466,16 @@ test('installation docs explain new-thread startup and uvx MinerU fallback', asy
   assert.match(englishReadme, /setup_required/i);
   assert.match(englishReadme, /ppt-render-mcp/i);
   assert.match(englishReadme, /mineru-open-mcp/i);
+  assert.match(englishReadme, /doctor/i);
+  assert.match(englishReadme, /MINERU_API_TOKEN/i);
 
   assert.match(chineseReadme, /新开.*Codex.*线程/);
   assert.match(chineseReadme, /uv\/uvx/i);
   assert.match(chineseReadme, /setup_required/i);
   assert.match(chineseReadme, /ppt-render-mcp/i);
   assert.match(chineseReadme, /mineru-open-mcp/i);
+  assert.match(chineseReadme, /doctor/i);
+  assert.match(chineseReadme, /MINERU_API_TOKEN/i);
 });
 
 test('assemble-image-ppt builds one full-slide PNG per slide', async () => {
@@ -563,6 +568,7 @@ test('renderer source includes consulting-research template support', async () =
 test('CLI help advertises enhancement commands', async () => {
   const help = await runCli(['help'], { expectJson: false });
   for (const command of [
+    'doctor',
     'reference-intake',
     'validate-deck-protocol',
     'protocol-review',
@@ -593,6 +599,7 @@ test('CLI help advertises enhancement commands', async () => {
 test('MCP server registers enhancement tools', async () => {
   const source = await readFile(mcpPath, 'utf8');
   for (const toolName of [
+    'ppt_composer_doctor',
     'parse_paper_local',
     'reference_intake',
     'validate_deck_protocol',
