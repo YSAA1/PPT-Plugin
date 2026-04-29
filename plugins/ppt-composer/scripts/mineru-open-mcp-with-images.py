@@ -10,6 +10,8 @@ server and patches that narrow MCP boundary so callers can use extracted figures
 from __future__ import annotations
 
 import argparse
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -17,6 +19,99 @@ from typing import Any, Dict, List, Optional
 from mineru_open_mcp import config
 from mineru_open_mcp.tools import extract as extract_mod
 from mineru_open_mcp.tools import tools as tools_mod
+
+
+_ORIGINAL_EXTRACT_SOURCES = extract_mod.extract_sources
+_SOURCE_QUEUE_BY_FILENAME: Dict[str, List[str]] = {}
+
+
+def _source_filename(source: str) -> str:
+    if source.startswith(("http://", "https://")):
+        name = source.split("?")[0].split("/")[-1]
+        return name or source
+    return Path(source).name
+
+
+def _pop_source_for_filename(filename: str) -> Optional[str]:
+    queue = _SOURCE_QUEUE_BY_FILENAME.get(filename) or []
+    if not queue:
+        return None
+    source = queue.pop(0)
+    if not queue:
+        _SOURCE_QUEUE_BY_FILENAME.pop(filename, None)
+    return source
+
+
+def _is_local_image(source: str) -> bool:
+    return Path(source).suffix.lower() in {".png", ".jpg", ".jpeg", ".jp2", ".webp", ".gif", ".bmp"}
+
+
+def _copy_input_image(source: str, out_dir: Path, stem: str) -> Dict[str, Any]:
+    image_dir = out_dir / stem / "images"
+    image_dir.mkdir(parents=True, exist_ok=True)
+    image_path = image_dir / Path(source).name
+    shutil.copy2(source, image_path)
+    return {
+        "image_count": 1,
+        "image_dir": str(image_dir),
+        "image_paths": [str(image_path)],
+        "image_source": "input_image",
+    }
+
+
+def _render_pdf_pages(source: str, out_dir: Path, stem: str) -> Dict[str, Any]:
+    pdftoppm = shutil.which("pdftoppm")
+    if not pdftoppm:
+        raise RuntimeError("MinerU Flash mode returned Markdown only and pdftoppm is not available for local PDF page-image fallback. Set MINERU_API_TOKEN for extracted figures/images.")
+
+    image_dir = out_dir / stem / "page-images"
+    image_dir.mkdir(parents=True, exist_ok=True)
+    prefix = image_dir / "page"
+    completed = subprocess.run(
+        [pdftoppm, "-png", "-r", "160", source, str(prefix)],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        timeout=180,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(completed.stderr.strip() or f"pdftoppm exited with code {completed.returncode}")
+
+    image_paths = sorted(str(path) for path in image_dir.glob("page-*.png"))
+    if not image_paths:
+        raise RuntimeError("pdftoppm completed but produced no page images")
+    return {
+        "image_count": len(image_paths),
+        "image_dir": str(image_dir),
+        "image_paths": image_paths,
+        "image_source": "pdf_page_render_fallback",
+    }
+
+
+def _fallback_images_from_source(source: Optional[str], out_dir: Path, stem: str) -> Dict[str, Any]:
+    if not source or source.startswith(("http://", "https://")):
+        return {}
+    source_path = Path(source)
+    if not source_path.exists():
+        return {}
+    if _is_local_image(source):
+        return _copy_input_image(source, out_dir, stem)
+    if source_path.suffix.lower() == ".pdf":
+        return _render_pdf_pages(source, out_dir, stem)
+    return {}
+
+
+async def _extract_sources_with_source_tracking(*args: Any, **kwargs: Any) -> List[Dict[str, Any]]:
+    sources = list(kwargs.get("sources") or (args[0] if args else []) or [])
+    previous = {key: value[:] for key, value in _SOURCE_QUEUE_BY_FILENAME.items()}
+    try:
+        for source in sources:
+            _SOURCE_QUEUE_BY_FILENAME.setdefault(_source_filename(str(source)), []).append(str(source))
+        return await _ORIGINAL_EXTRACT_SOURCES(*args, **kwargs)
+    finally:
+        _SOURCE_QUEUE_BY_FILENAME.clear()
+        _SOURCE_QUEUE_BY_FILENAME.update(previous)
 
 
 async def _build_result_entry_with_images(
@@ -58,21 +153,37 @@ async def _build_result_entry_with_images(
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    if save_to_file:
-        md_path = out_dir / f"{stem}.md"
-        try:
-            md_path.write_text(result.markdown, encoding="utf-8")
-            extract_path = str(md_path)
-        except Exception as exc:
-            config.logger.warning("Failed to save Markdown for %s: %s", filename, exc)
-            extract_path = str(out_dir)
-        entry["extract_path"] = extract_path
-        if ctx and ctx.request_context:
-            await ctx.info(f"Saved: {filename} -> {extract_path}")
+    # Upstream only saves Markdown when parsing multiple sources. PPT Composer
+    # needs durable parse artifacts even for the common single-PDF case, so save
+    # whenever an output directory is available while still keeping inline
+    # content in the MCP response.
+    md_path = out_dir / f"{stem}.md"
+    try:
+        md_path.write_text(result.markdown, encoding="utf-8")
+        extract_path = str(md_path)
+    except Exception as exc:
+        config.logger.warning("Failed to save Markdown for %s: %s", filename, exc)
+        extract_path = str(out_dir)
+    entry["extract_path"] = extract_path
+    if ctx and ctx.request_context:
+        await ctx.info(f"Saved: {filename} -> {extract_path}")
 
-    images = list(getattr(result, "images", []) or [])
+    source = _pop_source_for_filename(filename)
+    image_error: Optional[str] = None
+    try:
+        images = list(getattr(result, "images", []) or [])
+    except Exception as exc:
+        # Some environments can parse Markdown successfully but fail while
+        # downloading the optional MinerU result zip/images (for example proxy
+        # or SSL EOF issues). Keep the document parse successful and surface the
+        # image extraction problem as a warning field instead of failing intake.
+        config.logger.warning("Failed to load extracted images for %s: %s", filename, exc)
+        image_error = str(exc)
+        images = []
+
     if images:
         image_dir = out_dir / stem / "images"
+        image_dir.mkdir(parents=True, exist_ok=True)
         image_paths: List[str] = []
         for index, image in enumerate(images, 1):
             image_name = getattr(image, "name", "") or f"image_{index}.png"
@@ -86,9 +197,34 @@ async def _build_result_entry_with_images(
         entry["image_count"] = len(image_paths)
         entry["image_dir"] = str(image_dir)
         entry["image_paths"] = image_paths
+        entry["image_source"] = "mineru_extracted"
+    else:
+        try:
+            fallback = _fallback_images_from_source(source, out_dir, stem)
+        except Exception as exc:
+            config.logger.warning("Failed to create fallback images for %s: %s", filename, exc)
+            fallback = {}
+            image_error = image_error or str(exc)
+        if fallback:
+            entry.update(fallback)
+        else:
+            entry["image_count"] = 0
+            entry["image_paths"] = []
+            if image_error:
+                entry["image_error"] = image_error
+            elif "<!-- image" in result.markdown:
+                entry["image_error"] = (
+                    "MinerU returned image placeholders but no extracted image files. "
+                    "Set MINERU_API_TOKEN for full MinerU image extraction, or install pdftoppm for local PDF page-image fallback."
+                )
 
-    if result.zip_url:
-        entry["zip_url"] = result.zip_url
+    try:
+        zip_url = result.zip_url
+    except Exception as exc:
+        config.logger.warning("Failed to read zip_url for %s: %s", filename, exc)
+        zip_url = None
+    if zip_url:
+        entry["zip_url"] = zip_url
 
     if config.logger.isEnabledFor(10):
         task_id = getattr(result, "task_id", None)
@@ -132,6 +268,8 @@ def _format_results_keep_zip_url(
 
 
 def _install_patches() -> None:
+    extract_mod.extract_sources = _extract_sources_with_source_tracking
+    tools_mod.extract_sources = _extract_sources_with_source_tracking
     extract_mod._build_result_entry = _build_result_entry_with_images
     tools_mod._format_results = _format_results_keep_zip_url
 

@@ -85,7 +85,7 @@ PPT Composer 是一个用来制作 image-first PowerPoint 的 Codex 插件。你
 - 支持插件的 Codex
 - Node.js 20+
 - 可选：如果要用 MinerU 解析 PDF、Office 或图片资料，需要 `uv/uvx`
-- 可选：MinerU token，用于更高的文档解析额度
+- 可选：MinerU token，用于更高的文档解析额度和真正的图片/图表提取
 
 ### 从 GitHub 安装
 
@@ -151,7 +151,7 @@ codex plugin marketplace remove <marketplace-name>
 新开一个 Codex 线程或重启 Codex。插件会注册 `ppt-composer:image-first-ppt` 这个 skill，以及两个 MCP server：`ppt-render-mcp` 用于渲染、组装和 QA；`mineru-open-mcp` 用于文档解析。
 
 **`mineru-open-mcp` 返回 `setup_required: true`。**
-先安装 `uv/uvx`，再重启 Codex。即使 MinerU 解析还没准备好，核心的 `ppt-render-mcp` 仍然可以负责 PPTX 组装。
+先安装 `uv/uvx`，再重启 Codex。即使 MinerU 解析还没准备好，核心的 `ppt-render-mcp` 仍然可以负责 PPTX 组装。没有 MinerU token 时会使用 Flash 模式：会返回 Markdown，插件会尽量回退生成本地 PDF 页图或复制输入图片；如果你需要真正提取文档里的 figures/images，请配置 `MINERU_API_TOKEN`。
 
 **最终 PPTX 不方便逐字编辑。**
 这是 image-first 输出的预期结果。这个插件优先保证视觉一致性和可展示性，而不是原生 PowerPoint 可编辑性。

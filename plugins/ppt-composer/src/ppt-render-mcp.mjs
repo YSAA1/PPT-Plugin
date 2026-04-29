@@ -409,7 +409,7 @@ server.registerTool(
   "parse_paper_local",
   {
     title: "Parse Paper Local",
-    description: "Parse Markdown directly or invoke the local MinerU wrapper for PDF/image documents.",
+    description: "Parse Markdown directly; for PDF/Office/image extraction use mineru-open-mcp.parse_documents first, or use CLI parse-paper with an explicit local MinerU wrapper.",
     inputSchema: {
       inputPath: z.string().describe("Input paper path."),
       outDir: z.string().describe("Output parse-bundle directory."),
@@ -447,7 +447,7 @@ server.registerTool(
       style: z.string().optional().describe("Global visual style."),
       mode: z.enum(["brief_mode", "reference_grounded_mode"]).optional().describe("Protocol mode."),
       imageRole: z.enum(["source_image", "template_image", "logo"]).optional().describe("Role for direct image inputs."),
-      dryRun: z.boolean().optional().describe("Dry-run MinerU for PDF/DOC references."),
+      dryRun: z.boolean().optional().describe("Reserved for explicit local MinerU wrapper flows; PDF/Office/image extraction should use mineru-open-mcp first."),
     },
   },
   async ({ inputs, outDir, protocolPath, title, audience, language, pageCount, aspectRatio, style, mode, imageRole, dryRun }) => {

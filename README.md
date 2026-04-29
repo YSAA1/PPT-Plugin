@@ -85,7 +85,7 @@ Requirements:
 - Codex with plugin support
 - Node.js 20+
 - Optional: `uv/uvx` if you want MinerU-backed PDF, Office, or image parsing
-- Optional: MinerU token for higher document-parsing limits
+- Optional: MinerU token for higher document-parsing limits and true extracted figure/image assets
 
 ### Install from GitHub
 
@@ -151,7 +151,7 @@ Then restart Codex. Installed plugin copies live under `~/.codex/plugins/cache/<
 Start a new Codex thread or restart Codex. The plugin registers the `ppt-composer:image-first-ppt` skill plus two MCP servers: `ppt-render-mcp` for rendering/assembly/QA and `mineru-open-mcp` for document parsing.
 
 **`mineru-open-mcp` says `setup_required: true`.**
-Install `uv/uvx`, then restart Codex. The core `ppt-render-mcp` server can still handle PPTX assembly even if MinerU parsing is not ready.
+Install `uv/uvx`, then restart Codex. The core `ppt-render-mcp` server can still handle PPTX assembly even if MinerU parsing is not ready. Without a MinerU token, parsing uses Flash mode: Markdown is returned, and the plugin falls back to local PDF page images or input-image copies when possible; use `MINERU_API_TOKEN` when you need true extracted figures/images.
 
 **The final PPTX is hard to edit.**
 That is expected for image-first output. Use this plugin when visual consistency and presentation readiness matter more than native PowerPoint editability.

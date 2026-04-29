@@ -21,6 +21,8 @@ const child = spawn(
   [
     "--from",
     "mineru-open-mcp",
+    "--with",
+    "socksio",
     "python",
     "./scripts/mineru-open-mcp-with-images.py",
     "--transport",

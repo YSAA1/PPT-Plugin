@@ -71,9 +71,11 @@ function prewarmMineruDeps() {
     [
       "--from",
       "mineru-open-mcp",
+      "--with",
+      "socksio",
       "python",
       "-c",
-      "import mineru_open_mcp; print('mineru-open-mcp ready')"
+      "import mineru_open_mcp, socksio; print('mineru-open-mcp ready')"
     ],
     {
       cwd: pluginRoot,
