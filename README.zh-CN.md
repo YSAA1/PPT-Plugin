@@ -83,11 +83,14 @@ PPT Composer 是一个用来制作 image-first PowerPoint 的 Codex 插件。你
 要求：
 
 - 支持插件的 Codex
+- GitHub marketplace 安装需要本机 `PATH` 里能找到 Git
 - Node.js 20+
 - 可选：如果要用 MinerU 解析 PDF、Office 或图片资料，需要 `uv/uvx`
 - 可选：MinerU token，用于更高的文档解析额度
 
 ### 从 GitHub 安装
+
+先确认 `git --version` 能正常运行。Windows 用户需要先安装 Git for Windows，并重新打开 PowerShell/Codex，再运行：
 
 ```bash
 codex plugin marketplace add YSAA1/PPT-Plugin

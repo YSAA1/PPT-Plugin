@@ -83,11 +83,14 @@ Useful user guides:
 Requirements:
 
 - Codex with plugin support
+- Git available on `PATH` for GitHub marketplace installs
 - Node.js 20+
 - Optional: `uv/uvx` if you want MinerU-backed PDF, Office, or image parsing
 - Optional: MinerU token for higher document-parsing limits
 
 ### Install from GitHub
+
+Make sure `git --version` works first. On Windows, install Git for Windows and reopen PowerShell/Codex before running:
 
 ```bash
 codex plugin marketplace add YSAA1/PPT-Plugin
