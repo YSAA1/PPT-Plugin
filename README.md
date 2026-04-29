@@ -189,6 +189,7 @@ Requirements:
 
 - Node.js 20+
 - Codex with plugin support
+- `uv/uvx` if you want MinerU-backed PDF, Office, or image parsing
 - Optional MinerU token for higher-quality document parsing
 
 ### Install from GitHub
@@ -204,6 +205,8 @@ Then open Codex and install the plugin from the plugin browser:
 ```
 
 Choose the `PPT Composer` marketplace entry and select `Install plugin`.
+
+After installing, start a new Codex thread so bundled skills and MCP servers are loaded. If the plugin browser or an older Codex session was already open, restart Codex before testing the plugin.
 
 ### Install from a local clone
 
@@ -221,7 +224,14 @@ Then run:
 
 Open `PPT Composer` and select `Install plugin`.
 
+After installing, start a new Codex thread so bundled skills and MCP servers are loaded. If the plugin browser or an older Codex session was already open, restart Codex before testing the plugin.
+
 PPT Composer bundles its skill and MCP server configuration as a Codex plugin. On first MCP startup, the Node MCP wrapper automatically installs missing runtime npm dependencies inside the installed plugin cache. Install logs are written to stderr so they do not pollute the MCP stdio protocol channel.
+
+PPT Composer registers two MCP servers:
+
+- `ppt-render-mcp`: core PPT rendering, manifest validation, assembly, and QA. This server requires Node.js and the npm runtime dependencies.
+- `mineru-open-mcp`: document parsing through MinerU. This server requires `uv/uvx`. If `uvx` is missing, it stays discoverable as a setup-help MCP server and its tools return `setup_required: true` with the commands to run.
 
 ### Dependency Prewarm
 
@@ -250,6 +260,13 @@ npm run prewarm:mineru
 After prewarming, restart Codex so it starts MCP servers from the warm dependency cache.
 
 The MCP startup wrappers are cross-platform Node scripts. On Windows they call `npm.cmd` / `uvx.cmd` and the plugin parses DOCX/PPTX with JSZip instead of requiring a system `unzip` command.
+
+If MCP appears unavailable after install:
+
+1. Start a new Codex thread or restart Codex.
+2. Check whether `ppt-render-mcp` is available; this is the core server for PPTX assembly and QA.
+3. If `mineru-open-mcp` reports `setup_required: true`, install `uv/uvx`, run `npm run prewarm:mineru` from the installed plugin root, then restart Codex.
+4. If dependency installation timed out, run `npm run prewarm` from the installed plugin root, then restart Codex.
 
 Plugin manifest:
 

@@ -16,6 +16,8 @@ Prefer MCP as the internal tool layer when available. Keep MCP as the internal t
 CLI equivalents live under `node plugins/ppt-composer/src/cli.mjs`.
 CLI job tools include `imagegen-jobs-create`, `imagegen-jobs-backfill`, `imagegen-jobs-review`, `imagegen-jobs-revise`, `imagegen-jobs-status`, `imagegen-jobs-to-manifest`, `visual-qa`, and `asset-index-create`.
 
+MinerU document parsing is optional. If `mineru-open-mcp` returns `setup_required: true`, treat only MinerU parsing as blocked: install `uv/uvx`, run `npm run prewarm:mineru` from the installed plugin root, restart Codex, and continue using `ppt-render-mcp` for manifest validation, PPTX assembly, and QA while parsing is unavailable.
+
 ## Failure Conditions
 
 Stop and report the blocker when:

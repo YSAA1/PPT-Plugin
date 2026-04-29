@@ -7,15 +7,19 @@ import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { deflateSync } from 'node:zlib';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { readZipText } from '../src/zip-utils.mjs';
 import { buildPluginEnv, parseEnvFile } from '../scripts/env-loader.mjs';
 
 const execFileAsync = promisify(execFile);
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const pluginRoot = path.resolve(testDir, '..');
+const repoRoot = path.resolve(pluginRoot, '../..');
 const cliPath = path.join(pluginRoot, 'src/cli.mjs');
 const renderPath = path.join(pluginRoot, 'src/render-pptx.mjs');
 const mcpPath = path.join(pluginRoot, 'src/ppt-render-mcp.mjs');
+const mineruWrapperPath = path.join(pluginRoot, 'scripts/run-mineru-open-mcp.mjs');
 
 async function runCli(args, { expectJson = true } = {}) {
   const { stdout, stderr } = await execFileAsync(process.execPath, [cliPath, ...args], {
@@ -25,6 +29,17 @@ async function runCli(args, { expectJson = true } = {}) {
   assert.equal(stderr, '');
   if (!expectJson) return stdout;
   return JSON.parse(stdout);
+}
+
+async function withMcpClient({ command, args, cwd, env }, fn) {
+  const client = new Client({ name: 'ppt-composer-test', version: '0.0.0' });
+  const transport = new StdioClientTransport({ command, args, cwd, env });
+  try {
+    await client.connect(transport);
+    return await fn(client);
+  } finally {
+    await client.close().catch(() => {});
+  }
 }
 
 async function writeTinyPng(filePath) {
@@ -280,6 +295,7 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(toolsReference, /pptx_reference_intake/i);
   assert.match(toolsReference, /parse_paper_local/i);
   assert.match(toolsReference, /assemble_image_ppt/i);
+  assert.match(toolsReference, /setup_required: true/i);
   assert.match(fullSkillReference, /structured PPTX inventory\/reflow lane/i);
 
   const pluginManifest = JSON.parse(await readFile(path.join(pluginRoot, '.codex-plugin/plugin.json'), 'utf8'));
@@ -371,6 +387,46 @@ test('MCP wrappers load .env files without overriding shell environment', async 
   assert.equal(env.EXPLICIT_ONLY, '1');
   assert.equal(env.QUOTED_VALUE, 'hello world');
   assert.equal(env.INLINE_COMMENT, 'kept');
+});
+
+test('MinerU MCP wrapper stays discoverable when uvx is unavailable', async () => {
+  const nodeOnlyPath = path.dirname(process.execPath);
+  await withMcpClient({
+    command: process.execPath,
+    args: [mineruWrapperPath],
+    cwd: pluginRoot,
+    env: {
+      ...process.env,
+      PATH: nodeOnlyPath,
+    },
+  }, async (client) => {
+    const tools = await client.listTools();
+    const toolNames = tools.tools.map((tool) => tool.name).sort();
+    assert.deepEqual(toolNames, ['get_ocr_languages', 'parse_documents']);
+
+    const result = await client.callTool({ name: 'get_ocr_languages', arguments: {} });
+    const payload = JSON.parse(result.content[0].text);
+    assert.equal(payload.setup_required, true);
+    assert.match(payload.message, /uvx/i);
+    assert.ok(payload.languages.includes('en'));
+  });
+});
+
+test('installation docs explain new-thread startup and uvx MinerU fallback', async () => {
+  const englishReadme = await readFile(path.join(repoRoot, 'README.md'), 'utf8');
+  const chineseReadme = await readFile(path.join(repoRoot, 'README.zh-CN.md'), 'utf8');
+
+  assert.match(englishReadme, /start a new Codex thread/i);
+  assert.match(englishReadme, /uv\/uvx/i);
+  assert.match(englishReadme, /setup_required/i);
+  assert.match(englishReadme, /ppt-render-mcp/i);
+  assert.match(englishReadme, /mineru-open-mcp/i);
+
+  assert.match(chineseReadme, /新开.*Codex.*线程/);
+  assert.match(chineseReadme, /uv\/uvx/i);
+  assert.match(chineseReadme, /setup_required/i);
+  assert.match(chineseReadme, /ppt-render-mcp/i);
+  assert.match(chineseReadme, /mineru-open-mcp/i);
 });
 
 test('assemble-image-ppt builds one full-slide PNG per slide', async () => {

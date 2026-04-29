@@ -189,6 +189,7 @@ ppt-composer protocol-update-page --protocol output/deck-protocol.json --page 3 
 
 - Node.js 20+
 - 支持插件的 Codex
+- 如果要用 MinerU 解析 PDF、Office 或图片资料，需要 `uv/uvx`
 - 可选：MinerU token，用于更高质量的文档解析
 
 ### 从 GitHub 安装
@@ -204,6 +205,8 @@ codex plugin marketplace add YSAA1/PPT-Plugin
 ```
 
 选择 `PPT Composer`，点击 `Install plugin`。
+
+安装后请新开一个 Codex 线程，让内置 skill 和 MCP server 被加载。如果插件列表或旧 Codex 会话已经打开过，测试前先重启 Codex。
 
 ### 从本地 clone 安装
 
@@ -221,7 +224,14 @@ codex plugin marketplace add .
 
 打开 `PPT Composer`，点击 `Install plugin`。
 
+安装后请新开一个 Codex 线程，让内置 skill 和 MCP server 被加载。如果插件列表或旧 Codex 会话已经打开过，测试前先重启 Codex。
+
 PPT Composer 会把 skill 和 MCP server 配置一起打包成 Codex 插件。第一次启动 MCP 时，Node MCP 启动器会在已安装插件 cache 内自动安装缺失的运行依赖。安装日志会写到 stderr，不会污染 MCP 的 stdio 协议通道。
+
+PPT Composer 会注册两个 MCP server：
+
+- `ppt-render-mcp`：负责 PPT 渲染、manifest 校验、组装和 QA。这是核心 server，需要 Node.js 和 npm 运行依赖。
+- `mineru-open-mcp`：负责通过 MinerU 解析文档，需要 `uv/uvx`。如果缺少 `uvx`，它不会直接消失，而是降级成 setup-help MCP；工具会返回 `setup_required: true`，并提示需要运行的命令。
 
 ### 依赖预热
 
@@ -250,6 +260,13 @@ npm run prewarm:mineru
 预热后重启 Codex，让 MCP server 从已经准备好的依赖缓存启动。
 
 MCP 启动器是跨平台 Node 脚本。在 Windows 上会调用 `npm.cmd` / `uvx.cmd`，并且插件使用 JSZip 解析 DOCX/PPTX，不依赖系统自带 `unzip` 命令。
+
+如果安装后看起来 MCP 不可用：
+
+1. 先新开一个 Codex 线程，或者重启 Codex。
+2. 先确认 `ppt-render-mcp` 是否可用；它是 PPTX 组装和 QA 的核心 server。
+3. 如果 `mineru-open-mcp` 返回 `setup_required: true`，说明缺少 `uv/uvx`；安装后在已安装插件根目录运行 `npm run prewarm:mineru`，再重启 Codex。
+4. 如果是依赖安装超时，在已安装插件根目录运行 `npm run prewarm`，再重启 Codex。
 
 插件入口文件：
 
