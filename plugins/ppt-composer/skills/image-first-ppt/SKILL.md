@@ -83,7 +83,7 @@ If no uploaded file or explicit reference path exists, MUST NOT scan the current
 - `generate-assets --provider codex` is only a prompt-sheet handoff, not image generation.
 - `style_lock` in `imagegen-jobs.json` is the canonical visual consistency contract across workers.
 - 7+ confirmed pages do not require separate subagent wording from the user; protocol confirmation is enough authorization for bounded image workers.
-- Default subagent strategy is a lightweight context packet with `reasoning_effort: "low"`; forked context is optional and must not be combined with reasoning effort.
+- Default subagent strategy is a lightweight context packet. Default subagent reasoning is `low`; escalate to `medium` only for complex evidence/fidelity pages. Forked context is optional and must not be combined with reasoning effort.
 - Visual review is explicit opt-in. Deterministic `visual-qa` still runs before assembly.
 
 ## Internal Tools

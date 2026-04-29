@@ -50,7 +50,9 @@ Subagent runtime and model rules:
 - If a page range would exceed the maximum wait time, split the range into smaller subagent tasks.
 - Prefer more parallel one-page workers over long sequential multi-page workers when the deck has 2-6 pages.
 - For 7+ pages, keep at most 6 concurrent subagents, but size each consecutive range so the range fits inside the wait budget.
-- Image workers SHOULD use low reasoning when the spawn API shape allows it. The worker is executing a fixed image prompt, not planning the deck.
+- Default reasoning_effort is `low`. The worker is executing a fixed image prompt, not planning the deck.
+- Use `medium` only when the assigned page has `strict_embed` fidelity, dense scientific/table evidence, multiple reference assets that must be reconciled, a prior generation failure/revision, or an explicit user request for extra care on that page.
+- Do not use `high` or `xhigh` for image workers unless the user explicitly asks for deep reasoning; high reasoning is usually wasted and increases the chance that a worker redesigns the page instead of executing the confirmed protocol.
 - When `fork_context: true` is used, DO NOT set `reasoning_effort`; the current runtime can reject full-history fork calls that also set reasoning effort.
 - The leader may use stronger reasoning for planning, but worker prompts MUST stay narrow and execution-focused.
 
@@ -67,7 +69,8 @@ Shared context rules:
 
 Spawn call rules:
 
-- Default shape is the lightweight context packet: omit `fork_context` or set `fork_context: false`, set `reasoning_effort: "low"`, and put the shared deck generation context plus assigned page context in the worker prompt.
+- Default shape is the lightweight context packet: omit `fork_context` or set `fork_context: false`, set `reasoning_effort: "low"` for normal pages, and put the shared deck generation context plus assigned page context in the worker prompt.
+- For the medium-only escalation cases above, set `reasoning_effort: "medium"` and record the reason in the worker assignment or job note.
 - Each default worker packet contains only: verbatim `style_lock`, assigned page protocol slice, relevant reference asset paths, output PNG path, and the execution checklist.
 - Forking is optional only when the runtime benefits from extra history. If `fork_context: true` is used, DO NOT set `reasoning_effort`.
 - MUST NOT call `spawn_agent` with `fork_context: true` when also setting `agent_type` / role.
@@ -101,6 +104,13 @@ spawn_agent({
   message: "<worker prompt with shared deck generation context, assigned page protocol slice, and reference paths>"
 })
 
+Medium escalation for complex evidence/fidelity page:
+spawn_agent({
+  reasoning_effort: "medium",
+  fork_context: false,
+  message: "<worker prompt with medium reason: strict_embed / dense table evidence / multiple references / prior generation failure>"
+})
+
 Forbidden:
 spawn_agent({
   agent_type: "<any role>",
@@ -129,7 +139,7 @@ Scope:
 - Do not create PPTX, SVG, HTML, markdown, placeholder art, or prompt-only artifacts.
 - Follow the shared deck generation context exactly so pages are visually consistent with other workers.
 - Treat `speaker_notes` as presenter-only notes; do not render them as visible slide text.
-- Use low reasoning only; focus on direct image generation, not analysis.
+- Use low reasoning by default, or medium only when the assignment explicitly states the page meets the escalation rule; focus on direct image generation, not deck planning.
 
 Shared deck generation context:
 - Style lock:

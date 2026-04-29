@@ -261,7 +261,13 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(workerReference, /Before generating any page, count the confirmed protocol pages/i);
   assert.match(workerReference, /If there are 7\+ confirmed pages and no spawn attempt has been made, STOP/i);
   assert.match(workerReference, /10 pages is not a leader-only deck/i);
-  assert.match(workerReference, /set `reasoning_effort: "low"`/i);
+  assert.match(workerReference, /Default reasoning_effort is `low`/i);
+  assert.match(workerReference, /Use `medium` only when/i);
+  assert.match(workerReference, /strict_embed/i);
+  assert.match(workerReference, /dense scientific\/table evidence/i);
+  assert.match(workerReference, /Do not use `high` or `xhigh`/i);
+  assert.match(workerReference, /reasoning_effort: "medium"/i);
+  assert.match(skillSource, /Default subagent reasoning is `low`; escalate to `medium` only/i);
   assert.match(workerReference, /If role-less forked spawn fails, or if a role\/reasoning override is required by the runtime, MUST omit `fork_context`/i);
   assert.match(workerReference, /Forking is optional only when the runtime benefits from extra history/i);
   assert.match(workerReference, /Each default worker packet contains only: verbatim `style_lock`/i);
