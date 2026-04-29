@@ -113,6 +113,28 @@ codex plugin marketplace add .
 
 Then open `/plugins`, choose **PPT Composer**, and select **Install plugin**. Start a new Codex thread after installation.
 
+### Update an installed plugin
+
+`codex plugin marketplace add` registers a marketplace source; it is not a hot update for already-loaded Codex threads. For a GitHub marketplace, refresh the source with:
+
+```bash
+codex plugin marketplace upgrade
+```
+
+Then reopen `/plugins` and install **PPT Composer** from the refreshed source again if needed. Start a new Codex thread or restart Codex so skills and MCP servers are loaded from the refreshed plugin cache.
+
+If you installed from a local clone instead, pull the clone first, then run `codex plugin marketplace add .` again and reinstall from `/plugins`.
+
+### If two PPT Composer entries appear
+
+Codex lists plugins by marketplace source. The same plugin can appear twice if it is exposed by both a personal marketplace and a GitHub/repo marketplace. Keep one source and remove the other:
+
+```bash
+codex plugin marketplace remove <marketplace-name>
+```
+
+Then restart Codex. Installed plugin copies live under `~/.codex/plugins/cache/<marketplace-name>/<plugin-name>/<version>/`, so different marketplace names create separate cache entries.
+
 ## Outputs and Quality Boundaries
 
 - Final PPTX: one full-slide PNG per page, with no PowerPoint text overlays.
