@@ -124,6 +124,32 @@ npm run doctor -- --create-env-template
 
 The doctor reports whether `uvx`, MCP timeouts, PDF fallback, and `MINERU_API_TOKEN` are ready. Without a token, MinerU uses Flash/free mode; small PDFs can work, but large files and true figure extraction need a token. Put the token in the env file reported by doctor, then restart Codex.
 
+### Set up a MinerU API token
+
+This step is strongly recommended if you plan to use PPT Composer with PDFs, Office documents, scanned files, or reference images. PPT Composer can run without a token, but then MinerU falls back to Flash/free mode: limits are lower, output is Markdown-first, and real figure/image extraction may be unavailable. For research decks, paper reports, and strict reference-preservation workflows, create a MinerU API token before your first serious run.
+
+Use a private env file; do not paste the token into prompts or commit it to Git.
+
+1. Create an API token in your MinerU account.
+2. Run doctor with env-template creation:
+
+   ```bash
+   npm run doctor -- --create-env-template
+   ```
+
+3. Open the env file path reported by doctor and fill:
+
+   ```env
+   MINERU_API_TOKEN=your_mineru_api_token_here
+   ```
+
+   `MINERU_TOKEN` is also recognized for compatibility, but `MINERU_API_TOKEN` is the preferred name.
+
+4. Restart Codex or start a new Codex thread so the MCP servers inherit the new environment.
+5. Run `Run PPT Composer doctor.` again and confirm `mineru_token` is `ok` and mode is `full_api`.
+
+If you installed from the Codex plugin marketplace, the env file usually lives under the installed plugin cache path shown by doctor, for example `~/.codex/plugins/cache/.../ppt-composer/<version>/.env`. You may also point `PPT_COMPOSER_ENV_FILE` to another private env file if you keep secrets in a central location.
+
 ### Install from a local clone
 
 ```bash
