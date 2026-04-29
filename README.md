@@ -58,9 +58,10 @@ ppt-composer:image-first-ppt
 
 ```text
 brief and references
+  -> reference-assets/asset-index.json
   -> deck-protocol.json
+  -> deck-protocol.review.md
   -> protocol patch tools
-  -> localized asset index
   -> imagegen job manifest
   -> deterministic QA and visual review
   -> complete PNG manifest
@@ -114,6 +115,7 @@ Pages reference assets by id:
 ```
 
 Do not put raw image paths in `content_inputs`. Put files in `assets`, then reference their ids from pages.
+If reference files were provided, the protocol is not ready for confirmation until extracted/localized assets appear in `assets` and at least one reference-grounded page binds those asset ids.
 Use `speaker_notes` for presenter notes. It is carried into PowerPoint speaker notes and is not rendered as visible slide text. Existing protocols using `notes`, `remarks`, `presenter_notes`, or `备注` are accepted as aliases.
 
 PPT Composer keeps protocol edits and generation state in internal files:
@@ -121,6 +123,7 @@ PPT Composer keeps protocol edits and generation state in internal files:
 | File | Purpose |
 | --- | --- |
 | `reference-assets/asset-index.json` | Localized reference files and URLs with stable ids, hash, MIME, size, caption, and usage. |
+| `deck-protocol.review.md` | Human-readable review copy of the protocol: validation status, source inputs, assets, page claims, bindings, fidelity modes, and output paths. |
 | `imagegen-jobs.json` | Per-page generation state. `deck-protocol.json` remains the content source of truth. |
 | `visual-qa.json` | PNG checks plus visual review findings. It records missing/tiny/placeholder PNGs, consistency issues, protocol drift, and basic generated-image problems. |
 | `png-manifest.json` | Final assembly gate. It exists only after every planned page has a real generated PNG. |
@@ -348,15 +351,17 @@ Expected flow:
 
 1. Codex asks for missing requirements.
 2. References are parsed.
-3. `deck-protocol.json` is created.
-4. You review the protocol and ask for revisions in plain language if needed.
-5. Codex applies validated protocol patches and shows the updated plan.
-6. You explicitly confirm the protocol.
-7. Codex generates one PNG per page.
-8. Deterministic QA and visual review run. Multi-page decks should use a bounded vision/reviewer subagent for review.
-9. Failed pages are revised page by page. The protocol is patched first when prompt or fidelity rules need to change.
-10. A complete PNG manifest is created only after every required page is generated, or accepted when visual review is enabled.
-11. The PPTX is assembled after all PNGs pass the gate.
+3. Localized assets are written to `reference-assets/asset-index.json`.
+4. `deck-protocol.json` and `deck-protocol.review.md` are created.
+5. You review the protocol review file and ask for revisions in plain language if needed.
+6. Codex applies validated protocol patches and updates the review file.
+7. You explicitly confirm the protocol.
+8. Codex creates `imagegen-jobs.json`; 7+ page decks use bounded image-generation subagents before any direct-generation fallback.
+9. Codex generates one PNG per page.
+10. Deterministic QA and visual review run. Multi-page decks should use a bounded vision/reviewer subagent for review.
+11. Failed pages are revised page by page. The protocol is patched first when prompt or fidelity rules need to change.
+12. A complete PNG manifest is created only after every required page is generated, or accepted when visual review is enabled.
+13. The PPTX is assembled after all PNGs pass the gate.
 
 ## Quality Rules
 

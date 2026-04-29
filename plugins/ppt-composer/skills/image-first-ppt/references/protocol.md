@@ -9,6 +9,8 @@
 - Page fields
 - Speaker notes
 - Protocol patch rules
+- Asset gate
+- Review artifact
 - Confirmation summary
 
 ## Protocol
@@ -33,7 +35,7 @@ Existing-PPT hard-preservation requests are a different product lane:
 - Supported conservative fallback: embed each original full-slide screenshot as locked evidence, then only add external framing if the user accepts that the internal page layout will not be reflowed.
 - Otherwise stop before generation and explain that the missing capability is a structured PPTX inventory/reflow lane: parse each page's text, images, charts, tables, positions, z-order, and styles; optimize layout using those locked objects; then run exactness QA.
 
-Use `asset-index-create` or `reference-intake` to keep `reference-assets/asset-index.json` synchronized. Page content MUST reference stable asset ids, not raw paths.
+Use `reference-intake` / `pptx-reference-intake` before drafting or confirming any reference-grounded protocol. Use `asset-index-create` only for adding standalone local/remote assets after intake. Keep `reference-assets/asset-index.json` synchronized. Page content MUST reference stable asset ids, not raw paths.
 
 Protocol skeleton:
 
@@ -91,6 +93,20 @@ Protocol patch rules:
 - MUST pretty-print JSON after patching.
 - MUST preserve `version: "0.1"` and additive compatibility.
 
-Before asking for confirmation, present the title, page count, aspect ratio, global visual style, page-by-page claims, evidence bindings, fidelity modes, prompts, negative prompts, and output filenames. Then stop until the user explicitly confirms.
+Asset gate:
+
+- If the user provided reference files, `deck-protocol.json.assets` MUST contain the localized text, table, image, logo, or template assets extracted from those files.
+- `reference-assets/asset-index.json` MUST exist for local assets before confirmation.
+- A reference-grounded protocol with `assets: []` is invalid unless the agent records a concrete intake blocker and stops before confirmation.
+- At least one reference-grounded page MUST bind localized assets through `content_inputs` or `reference_asset_ids`; `free_generation: true` cannot be used as a global bypass after reference parsing fails.
+- Direct image/logo/template inputs MUST appear in `assets` and relevant page/style bindings; do not leave images only as raw paths in prose.
+
+Review artifact:
+
+- Before asking for protocol confirmation, write `deck-protocol.review.md` with `protocol_review` / CLI `protocol-review`.
+- The review artifact MUST include validation status, source inputs, warnings, asset table, page table, evidence bindings, fidelity modes, and output filenames.
+- The chat message may summarize the protocol, but the review artifact is the human review version. Do not rely on chat-only review.
+
+Before asking for confirmation, present the review artifact path plus the title, page count, aspect ratio, global visual style, page-by-page claims, evidence bindings, fidelity modes, prompts, negative prompts, and output filenames. Then stop until the user explicitly confirms.
 
 Explicit confirmation means the user clearly approves the protocol, for example "确认协议", "按此 protocol 生成", "开始生图", or an equivalent clear approval. Ambiguous replies such as "继续", "ok", or "不错" do not authorize image generation unless they clearly refer to the protocol summary.

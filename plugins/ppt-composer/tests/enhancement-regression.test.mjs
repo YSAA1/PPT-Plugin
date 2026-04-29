@@ -225,6 +225,9 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(skillSource, /references\/tools-and-failures\.md/i);
   assert.match(skillSource, /deck-protocol\.json/i);
   assert.match(skillSource, /Requirement Gate/i);
+  assert.match(skillSource, /Reference Asset Gate/i);
+  assert.match(skillSource, /deck-protocol\.review\.md/i);
+  assert.match(skillSource, /worker_dispatch\.assignments/i);
   assert.match(skillSource, /ask only for the missing fields and STOP/i);
   assert.match(skillSource, /Stop condition: any required item is unknown/i);
   assert.match(skillSource, /Protocol Confirmation Gate/i);
@@ -248,6 +251,8 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(protocolReference, /structured PPTX inventory\/reflow lane/i);
   assert.match(workerReference, /leader MUST create one shared deck generation context/i);
   assert.match(skillSource, /style_lock/i);
+  assert.match(workerReference, /worker_dispatch\.assignments/i);
+  assert.match(workerReference, /Use the reasoning value from `worker_dispatch\.assignments\[\]\.reasoning_effort`/i);
   assert.match(skillSource, /7\+ confirmed pages.*do not require.*subagent/i);
   assert.match(workerReference, /Forked chat history is supplemental only/i);
   assert.match(workerReference, /A worker prompt that does not include the `style_lock` is invalid/i);
@@ -292,6 +297,10 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(skillSource, /no later PPT text overlay/i);
   assert.match(skillSource, /MCP as the internal tool layer/i);
   assert.match(toolsReference, /asset-index-create/i);
+  assert.match(toolsReference, /protocol-review/i);
+  assert.match(protocolReference, /Asset gate:/i);
+  assert.match(protocolReference, /Review artifact:/i);
+  assert.match(protocolReference, /reference-grounded protocol with `assets: \[\]` is invalid/i);
   assert.match(toolsReference, /imagegen-jobs-create/i);
   assert.match(skillSource, /visual-qa/i);
   assert.match(qaReference, /Visual review prompt template/i);
@@ -533,6 +542,7 @@ test('CLI help advertises enhancement commands', async () => {
   for (const command of [
     'reference-intake',
     'validate-deck-protocol',
+    'protocol-review',
     'protocol-add-asset',
     'protocol-bind-asset',
     'protocol-update-page',
@@ -563,6 +573,7 @@ test('MCP server registers enhancement tools', async () => {
     'parse_paper_local',
     'reference_intake',
     'validate_deck_protocol',
+    'protocol_review',
     'protocol_patch',
     'asset_index_create',
     'imagegen_jobs_create',
@@ -646,6 +657,47 @@ test('reference-intake writes deck protocol from mixed local references', async 
   const validation = await runCli(['validate-deck-protocol', '--protocol', protocolPath]);
   assert.equal(validation.ok, true);
   assert.equal(validation.pages, 3);
+
+  const reviewPath = path.join(outDir, 'deck-protocol.review.md');
+  const reviewResult = await runCli(['protocol-review', '--protocol', protocolPath, '--out', reviewPath]);
+  assert.equal(reviewResult.review, reviewPath);
+  const review = await readFile(reviewPath, 'utf8');
+  assert.match(review, /# Protocol Demo Review/);
+  assert.match(review, /## Assets/);
+  assert.match(review, /source_image/);
+  assert.match(review, /## Pages/);
+  assert.match(review, /Status: OK/);
+});
+
+test('reference-grounded protocol with source inputs cannot bypass empty assets', async () => {
+  const outDir = await mkdtemp(path.join(tmpdir(), 'ppt-composer-protocol-asset-gate-'));
+  const protocolPath = path.join(outDir, 'deck-protocol.json');
+  const protocol = {
+    kind: 'ppt-composer-deck-protocol',
+    version: '0.1',
+    mode: 'reference_grounded_mode',
+    source: { inputs: [path.join(outDir, 'paper.pdf')] },
+    deck: { title: 'Asset Gate Demo', language: 'zh', audience: 'lab', page_count: 1, aspect_ratio: '16:9' },
+    style: { description: 'consulting', template_image_ids: [], logo_ids: [], palette: [], typography: '' },
+    assets: [],
+    pages: [{
+      page: 1,
+      title: 'Page 1',
+      claim: 'Claim from reference.',
+      content_inputs: { text: [], tables: [], images: [] },
+      reference_asset_ids: [],
+      fidelity: 'free',
+      final_image_prompt: 'Create a complete full-slide image.',
+      negative_prompt: 'No fake numbers.',
+      output_png: 'dist/slides/slide-01.png',
+      free_generation: true,
+    }],
+  };
+  await writeFile(protocolPath, `${JSON.stringify(protocol, null, 2)}\n`);
+  await assert.rejects(
+    runCli(['validate-deck-protocol', '--protocol', protocolPath]),
+    /must include localized assets/,
+  );
 });
 
 test('protocol patch tools update assets, bindings, page fields, and fidelity with validation', async () => {
@@ -787,6 +839,13 @@ test('imagegen jobs gate manifest creation and visual QA blocks bad PNGs', async
   assert.match(jobsAfterCreate.style_lock.style.font_scale, /readable/);
   assert.match(jobsAfterCreate.style_lock.style.chart_style, /consulting\/research/);
   assert.match(jobsAfterCreate.style_lock.style.margins, /whitespace/);
+  assert.equal(jobsAfterCreate.worker_dispatch.required, true);
+  assert.equal(jobsAfterCreate.worker_dispatch.default_reasoning_effort, 'low');
+  assert.equal(jobsAfterCreate.worker_dispatch.assignments.length, 6);
+  assert.deepEqual(
+    jobsAfterCreate.worker_dispatch.assignments.flatMap((assignment) => assignment.pages),
+    Array.from({ length: 20 }, (_, index) => index + 1),
+  );
   assert.deepEqual(jobsAfterCreate.visualReview.dimensions, [
     'consistency',
     'protocol_alignment',

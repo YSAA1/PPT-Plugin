@@ -62,6 +62,12 @@ export function validateDeckProtocol(protocol, { requireGeneratedPng = false, ba
     errors.push("pages must be a non-empty array");
   }
 
+  const hasReferenceInputs = Boolean(protocol?.source?.inputs?.length);
+  if (protocol?.mode === "reference_grounded_mode" && hasReferenceInputs && assetIds.size === 0) {
+    errors.push("reference_grounded_mode with source inputs must include localized assets; run reference-intake or record an intake blocker before confirmation");
+  }
+  let pagesWithBoundEvidence = 0;
+
   for (const [index, page] of (pages || []).entries()) {
     const label = `pages[${index}]`;
     if (!Number.isFinite(Number(page.page))) errors.push(`${label}.page is required`);
@@ -106,6 +112,9 @@ export function validateDeckProtocol(protocol, { requireGeneratedPng = false, ba
     if (protocol.mode === "reference_grounded_mode" && !hasEvidence) {
       errors.push(`${label} in reference_grounded_mode must bind to evidence or set free_generation=true`);
     }
+    if ((page.reference_asset_ids || []).length || textInputs.length || tableInputs.length || imageInputs.length) {
+      pagesWithBoundEvidence += 1;
+    }
 
     if (requireGeneratedPng && page.output_png) {
       const resolved = path.isAbsolute(page.output_png) ? page.output_png : path.resolve(baseDir, page.output_png);
@@ -113,6 +122,10 @@ export function validateDeckProtocol(protocol, { requireGeneratedPng = false, ba
         errors.push(`${label}.output_png does not exist: ${resolved}`);
       }
     }
+  }
+
+  if (protocol?.mode === "reference_grounded_mode" && hasReferenceInputs && assetIds.size > 0 && pagesWithBoundEvidence === 0) {
+    errors.push("reference_grounded_mode with source inputs must bind at least one page to localized assets; free_generation cannot be used as a global intake bypass");
   }
 
   return {

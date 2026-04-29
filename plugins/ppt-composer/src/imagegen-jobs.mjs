@@ -18,12 +18,14 @@ const SEVERITY = { pass: 0, warn: 1, fail: 2 };
 export function createImagegenJobs(protocol, { protocolPath = null, outPath = null } = {}) {
   const pages = protocol.pages || [];
   const styleLock = buildStyleLock(protocol);
+  const workerDispatch = buildWorkerDispatch(pages);
   return {
     kind: "ppt-composer-imagegen-jobs",
     version: "0.1",
     createdAt: new Date().toISOString(),
     protocol: protocolPath || protocol.source?.protocolPath || null,
     style_lock: styleLock,
+    worker_dispatch: workerDispatch,
     visualReview: {
       enabled: false,
       dimensions: REVIEW_DIMENSIONS,
@@ -64,6 +66,58 @@ export function createImagegenJobs(protocol, { protocolPath = null, outPath = nu
     })),
     outPath,
   };
+}
+
+function buildWorkerDispatch(pages) {
+  const pageCount = pages.length;
+  const required = pageCount >= 7;
+  const assignments = required ? splitWorkerAssignments(pages) : [];
+  return {
+    required,
+    reason: required
+      ? "7+ confirmed pages require bounded image-generation subagent dispatch before direct generation fallback"
+      : "leader generation or a small worker batch is allowed for 1-6 pages",
+    max_concurrency: required ? Math.min(6, assignments.length) : Math.min(2, pageCount),
+    default_reasoning_effort: "low",
+    medium_escalation_rule: "strict_embed, dense table/scientific evidence, multiple reference assets, prior failure, or explicit user extra-care request",
+    assignments,
+    fallback_requires_recorded_spawn_blocker: required,
+  };
+}
+
+function splitWorkerAssignments(pages) {
+  const pageCount = pages.length;
+  const workerCount = pageCount <= 12 ? Math.min(6, Math.max(5, Math.ceil(pageCount / 2))) : 6;
+  const assignments = [];
+  for (let workerIndex = 0; workerIndex < workerCount; workerIndex += 1) {
+    const start = Math.floor((workerIndex * pageCount) / workerCount);
+    const end = Math.floor(((workerIndex + 1) * pageCount) / workerCount);
+    const slice = pages.slice(start, end);
+    if (!slice.length) continue;
+    const pageNumbers = slice.map((page) => Number(page.page));
+    const mediumReasons = slice.flatMap((page) => mediumReasonsForPage(page).map((reason) => `p${page.page}:${reason}`));
+    assignments.push({
+      id: `image-worker-${String(assignments.length + 1).padStart(2, "0")}`,
+      pages: pageNumbers,
+      page_range: pageNumbers.length === 1 ? String(pageNumbers[0]) : `${pageNumbers[0]}-${pageNumbers.at(-1)}`,
+      reasoning_effort: mediumReasons.length ? "medium" : "low",
+      medium_reason: mediumReasons.join("; "),
+      status: "planned",
+      spawn_attempt: null,
+    });
+  }
+  return assignments;
+}
+
+function mediumReasonsForPage(page = {}) {
+  const reasons = [];
+  if (page.fidelity === "strict_embed") reasons.push("strict_embed");
+  const tableCount = page.content_inputs?.tables?.length || 0;
+  const imageCount = page.content_inputs?.images?.length || 0;
+  const referenceCount = page.reference_asset_ids?.length || 0;
+  if (tableCount) reasons.push("table_evidence");
+  if (imageCount + referenceCount > 1) reasons.push("multiple_reference_assets");
+  return reasons;
 }
 
 export function summarizeJobs(jobs, { requireAccepted = null } = {}) {

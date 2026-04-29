@@ -36,21 +36,25 @@ MUST satisfy all rules:
 Execute in this exact order. Do not skip forward.
 
 1. Requirement Gate: before creating `deck-protocol.json`, all required fields below MUST be known or explicitly marked "user does not care"; if any required field is missing, ask only for the missing fields and STOP.
-2. Create `deck-protocol.json`. Read [references/protocol.md](references/protocol.md).
-3. Validate `deck-protocol.json`.
-4. Patch revisions only through protocol patch tools. If patch tools are unavailable, record the reason, edit the protocol directly, and immediately rerun `validate-deck-protocol`.
-5. Present the protocol summary and wait for explicit protocol confirmation. This is the Protocol Confirmation Gate.
-6. After confirmation, count confirmed pages, then generate final full-slide PNGs with Codex image generation. For 7+ confirmed pages, automatic bounded subagent dispatch is REQUIRED. Read [references/image-generation-workers.md](references/image-generation-workers.md).
-7. Track page status in `imagegen-jobs.json`.
-8. Run deterministic `visual-qa` to check whether the generated PNG files are structurally assembleable. Read [references/manifest-visual-qa.md](references/manifest-visual-qa.md).
-9. Run the internal visual review loop only when the user explicitly asks for visual QA, strict review, consistency checking, or protocol-execution checking.
-10. Create `png-manifest.json` only from complete accepted/generated jobs. If visual review is enabled, every page MUST be `accepted`.
-11. Assemble with `assemble-image-ppt` / MCP `assemble_image_ppt`.
-12. Run final `qa_pptx`.
+2. Reference Asset Gate: if reference files exist, run `reference_intake` / CLI `reference-intake` (or `pptx_reference_intake` for PPTX references) before drafting or confirming the protocol. The resulting `reference-assets/asset-index.json` and localized protocol `assets` are mandatory. If there are no references, record brief-only mode explicitly.
+3. Create or update `deck-protocol.json` from the intake output. Read [references/protocol.md](references/protocol.md).
+4. Validate `deck-protocol.json`. In reference-grounded mode, `assets: []` or pages that never bind localized assets are blockers, not acceptable review drafts.
+5. Patch revisions only through protocol patch tools. If patch tools are unavailable, record the reason, edit the protocol directly, and immediately rerun `validate-deck-protocol`.
+6. Generate `deck-protocol.review.md` with `protocol_review` / CLI `protocol-review`, then present that review artifact plus a short protocol summary and wait for explicit protocol confirmation. This is the Protocol Confirmation Gate.
+7. After confirmation, create `imagegen-jobs.json`, count confirmed pages, and use `jobs.worker_dispatch.assignments` as the worker plan. For 7+ confirmed pages, automatic bounded subagent dispatch is REQUIRED before direct generation fallback. Read [references/image-generation-workers.md](references/image-generation-workers.md).
+8. Track page status in `imagegen-jobs.json`.
+9. Run deterministic `visual-qa` to check whether the generated PNG files are structurally assembleable. Read [references/manifest-visual-qa.md](references/manifest-visual-qa.md).
+10. Run the internal visual review loop only when the user explicitly asks for visual QA, strict review, consistency checking, or protocol-execution checking.
+11. Create `png-manifest.json` only from complete accepted/generated jobs. If visual review is enabled, every page MUST be `accepted`.
+12. Assemble with `assemble-image-ppt` / MCP `assemble_image_ppt`.
+13. Run final `qa_pptx`.
 
 Hard stop conditions:
 
 - If protocol is not confirmed, STOP before image generation.
+- If references exist but `assets` is empty, `reference-assets/asset-index.json` is missing, or no page binds extracted assets, STOP before confirmation.
+- If `deck-protocol.review.md` is missing, STOP before asking for protocol confirmation.
+- If 7+ confirmed pages exist and no worker dispatch/spawn attempt has been made, STOP before direct generation.
 - If any page lacks a real PNG, STOP before manifest creation.
 - If `visual-qa` status is `fail`, STOP before assembly. Manual override is allowed only for overrideable review findings, never for missing/non-PNG/placeholder/tiny/strict_embed fidelity failures.
 - If final PPTX QA does not show one picture per slide and zero text overlays, STOP and report failure.
@@ -82,6 +86,8 @@ If no uploaded file or explicit reference path exists, MUST NOT scan the current
 - Codex built-in image generation is the primary image path; missing `OPENAI_API_KEY` is not evidence that built-in `image_gen` is unavailable.
 - `generate-assets --provider codex` is only a prompt-sheet handoff, not image generation.
 - `style_lock` in `imagegen-jobs.json` is the canonical visual consistency contract across workers.
+- `deck-protocol.review.md` is the human review version; chat summary alone is not enough for protocol confirmation.
+- `imagegen-jobs.json.worker_dispatch` is the canonical subagent dispatch plan for 7+ page decks.
 - 7+ confirmed pages do not require separate subagent wording from the user; protocol confirmation is enough authorization for bounded image workers.
 - Default subagent strategy is a lightweight context packet. Default subagent reasoning is `low`; escalate to `medium` only for complex evidence/fidelity pages. Forked context is optional and must not be combined with reasoning effort.
 - Visual review is explicit opt-in. Deterministic `visual-qa` still runs before assembly.

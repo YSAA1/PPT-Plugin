@@ -29,7 +29,8 @@ Primary path: Codex built-in image generation via the installed `imagegen` skill
 Worker dispatch decision gate:
 
 - Before generating any page, count the confirmed protocol pages.
-- If there are 7+ confirmed pages and no spawn attempt has been made, STOP before direct generation and attempt worker dispatch first.
+- Create `imagegen-jobs.json` first and inspect `worker_dispatch.assignments`.
+- If there are 7+ confirmed pages and no spawn attempt has been made, STOP before direct generation and attempt worker dispatch from `worker_dispatch.assignments` first.
 - 10 pages is not a leader-only deck; it is in the 7-12 page lane and MUST use the default worker split unless spawn is unavailable, blocked, or a concrete spawn attempt fails.
 
 Leader must split work as follows:
@@ -60,6 +61,7 @@ Shared context rules:
 
 - Before spawning workers, the leader MUST create one shared deck generation context from the confirmed protocol: deck title, audience, aspect ratio, global style, palette, typography, logo/template asset ids, page list, global negative rules, QA acceptance rules, and asset index.
 - `imagegen-jobs.json` MUST contain a `style_lock` object. Treat that object as the canonical shared visual contract for all image-generation and visual-review workers.
+- `imagegen-jobs.json` MUST contain `worker_dispatch`. For 7+ pages, `worker_dispatch.required` MUST be true and `worker_dispatch.assignments` MUST be non-empty before any direct generation fallback.
 - `style_lock` MUST include stable visual fields for layout density, font/size tendency, palette, chart style, margins/whitespace, and forbidden items.
 - Every worker MUST receive the exact same `style_lock` plus only its assigned page protocol slice and relevant reference asset paths.
 - MUST NOT rely on inherited chat history as the only consistency mechanism.
@@ -70,6 +72,7 @@ Shared context rules:
 Spawn call rules:
 
 - Default shape is the lightweight context packet: omit `fork_context` or set `fork_context: false`, set `reasoning_effort: "low"` for normal pages, and put the shared deck generation context plus assigned page context in the worker prompt.
+- Use the reasoning value from `worker_dispatch.assignments[].reasoning_effort`; it is normally `low` and only `medium` for the documented escalation cases.
 - For the medium-only escalation cases above, set `reasoning_effort: "medium"` and record the reason in the worker assignment or job note.
 - Each default worker packet contains only: verbatim `style_lock`, assigned page protocol slice, relevant reference asset paths, output PNG path, and the execution checklist.
 - Forking is optional only when the runtime benefits from extra history. If `fork_context: true` is used, DO NOT set `reasoning_effort`.

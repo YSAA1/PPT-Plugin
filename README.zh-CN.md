@@ -58,9 +58,10 @@ ppt-composer:image-first-ppt
 
 ```text
 需求和参考资料
+  -> reference-assets/asset-index.json
   -> deck-protocol.json
+  -> deck-protocol.review.md
   -> 协议补丁工具
-  -> 本地资产索引
   -> 生图任务清单
   -> 确定性 QA 与视觉复审
   -> 完整 PNG manifest
@@ -114,6 +115,7 @@ ppt-composer:image-first-ppt
 ```
 
 不要把原始图片路径直接写进 `content_inputs`。真实文件路径应该放在 `assets`，页面里只引用对应的 asset id。
+如果用户提供了参考文件，协议必须先把解析/本地化后的资料写进 `assets`，并且至少有一页通过 asset id 绑定这些资料，否则还不能进入确认协议和生图阶段。
 使用 `speaker_notes` 写演讲者备注；它会进入 PowerPoint 备注页，不会渲染成页面可见文字。已有协议里的 `notes`、`remarks`、`presenter_notes` 或 `备注` 会作为兼容别名读取。
 
 PPT Composer 会把协议修改和生成状态保存在内部文件里：
@@ -121,6 +123,7 @@ PPT Composer 会把协议修改和生成状态保存在内部文件里：
 | 文件 | 用途 |
 | --- | --- |
 | `reference-assets/asset-index.json` | 本地化后的参考文件和 URL，包含稳定 id、hash、MIME、大小、说明和用途。 |
+| `deck-protocol.review.md` | 给用户审阅的协议版本，包含校验状态、来源文件、资产列表、页面观点、证据绑定、保真模式和输出路径。 |
 | `imagegen-jobs.json` | 每页生图任务状态；`deck-protocol.json` 仍然是内容真相。 |
 | `visual-qa.json` | PNG 检查和视觉复审报告；记录缺失、过小、placeholder、一致性问题、协议偏离和基本图像问题。 |
 | `png-manifest.json` | 最终组装门禁；只有每页都有真实生成 PNG 后才创建。 |
@@ -348,15 +351,17 @@ export PPT_COMPOSER_ENV_FILE="$HOME/.config/ppt-composer/env"
 
 1. Codex 询问缺失信息。
 2. 解析参考资料。
-3. 生成 `deck-protocol.json`。
-4. 你审阅协议，需要修改时直接用自然语言提出。
-5. Codex 用协议补丁工具修改并展示更新后的计划。
-6. 你明确确认协议。
-7. Codex 按页生成 PNG。
-8. 运行确定性 QA 和视觉复审；多页 deck 优先用 bounded vision/reviewer subagent 逐页检查。
-9. 失败页按页返工；如果需要改 prompt 或保真规则，先 patch `deck-protocol.json`。
-10. 每页都生成完成后创建 PNG manifest；如果启用了视觉复审，则必须每页都是 accepted。
-11. PNG 通过门禁后组装 PPTX。
+3. 把解析/本地化后的资料写入 `reference-assets/asset-index.json`。
+4. 生成 `deck-protocol.json` 和 `deck-protocol.review.md`。
+5. 你审阅 review 协议，需要修改时直接用自然语言提出。
+6. Codex 用协议补丁工具修改，并同步更新 review 文件。
+7. 你明确确认协议。
+8. Codex 创建 `imagegen-jobs.json`；7 页及以上 deck 先按 worker dispatch 计划派生图 subagent，只有派发失败或不可用才回退到 leader 直接生成。
+9. Codex 按页生成 PNG。
+10. 运行确定性 QA 和视觉复审；多页 deck 优先用 bounded vision/reviewer subagent 逐页检查。
+11. 失败页按页返工；如果需要改 prompt 或保真规则，先 patch `deck-protocol.json`。
+12. 每页都生成完成后创建 PNG manifest；如果启用了视觉复审，则必须每页都是 accepted。
+13. PNG 通过门禁后组装 PPTX。
 
 ## 质量边界
 
