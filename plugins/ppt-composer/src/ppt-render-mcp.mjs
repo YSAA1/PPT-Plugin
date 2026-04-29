@@ -21,6 +21,7 @@ import { createAssetIndex } from "./asset-index.mjs";
 import { createJobsFile, backfillJobsFile, reviewJobsFile, reviseJobsFile, jobsToManifestFile, summarizeJobs } from "./imagegen-jobs.mjs";
 import { runVisualQaFile } from "./visual-qa.mjs";
 import { pptxReferenceIntake } from "./pptx-reference-intake.mjs";
+import { createProtocolReview } from "./protocol-review.mjs";
 import { readJson, resolvePath } from "./lib.mjs";
 
 const server = new McpServer({
@@ -492,6 +493,27 @@ server.registerTool(
     });
     if (!report.ok) throw new Error(`Invalid deck protocol:\n${report.errors.join("\n")}`);
     return jsonToolResult(report);
+  },
+);
+
+server.registerTool(
+  "protocol_review",
+  {
+    title: "Protocol Review",
+    description: "Write a human-readable deck-protocol.review.md before asking for protocol confirmation.",
+    inputSchema: {
+      protocolPath: z.string().describe("deck-protocol.json path."),
+      outPath: z.string().describe("Output deck-protocol.review.md path."),
+    },
+  },
+  async ({ protocolPath, outPath }) => {
+    const resolvedProtocol = resolvePath(protocolPath);
+    const resolvedOut = resolvePath(outPath);
+    const protocol = await readJson(resolvedProtocol);
+    const review = createProtocolReview(protocol, { protocolPath: resolvedProtocol });
+    await mkdir(path.dirname(resolvedOut), { recursive: true });
+    await writeFile(resolvedOut, review, "utf8");
+    return jsonToolResult({ review: resolvedOut });
   },
 );
 

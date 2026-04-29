@@ -7,15 +7,19 @@ import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { deflateSync } from 'node:zlib';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { readZipText } from '../src/zip-utils.mjs';
 import { buildPluginEnv, parseEnvFile } from '../scripts/env-loader.mjs';
 
 const execFileAsync = promisify(execFile);
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const pluginRoot = path.resolve(testDir, '..');
+const repoRoot = path.resolve(pluginRoot, '../..');
 const cliPath = path.join(pluginRoot, 'src/cli.mjs');
 const renderPath = path.join(pluginRoot, 'src/render-pptx.mjs');
 const mcpPath = path.join(pluginRoot, 'src/ppt-render-mcp.mjs');
+const mineruWrapperPath = path.join(pluginRoot, 'scripts/run-mineru-open-mcp.mjs');
 
 async function runCli(args, { expectJson = true } = {}) {
   const { stdout, stderr } = await execFileAsync(process.execPath, [cliPath, ...args], {
@@ -25,6 +29,17 @@ async function runCli(args, { expectJson = true } = {}) {
   assert.equal(stderr, '');
   if (!expectJson) return stdout;
   return JSON.parse(stdout);
+}
+
+async function withMcpClient({ command, args, cwd, env }, fn) {
+  const client = new Client({ name: 'ppt-composer-test', version: '0.0.0' });
+  const transport = new StdioClientTransport({ command, args, cwd, env });
+  try {
+    await client.connect(transport);
+    return await fn(client);
+  } finally {
+    await client.close().catch(() => {});
+  }
 }
 
 async function writeTinyPng(filePath) {
@@ -210,6 +225,12 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(skillSource, /references\/tools-and-failures\.md/i);
   assert.match(skillSource, /deck-protocol\.json/i);
   assert.match(skillSource, /Requirement Gate/i);
+  assert.match(skillSource, /Reference Asset Gate/i);
+  assert.match(skillSource, /deck-protocol\.review\.md/i);
+  assert.match(skillSource, /worker_dispatch\.assignments/i);
+  assert.match(skillSource, /speaker_notes.*by default/i);
+  assert.match(skillSource, /page-number\/footer policy/i);
+  assert.match(skillSource, /asset ids, filenames, paths, `source:` labels/i);
   assert.match(skillSource, /ask only for the missing fields and STOP/i);
   assert.match(skillSource, /Stop condition: any required item is unknown/i);
   assert.match(skillSource, /Protocol Confirmation Gate/i);
@@ -233,6 +254,9 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(protocolReference, /structured PPTX inventory\/reflow lane/i);
   assert.match(workerReference, /leader MUST create one shared deck generation context/i);
   assert.match(skillSource, /style_lock/i);
+  assert.match(workerReference, /worker_dispatch\.assignments/i);
+  assert.match(workerReference, /Use the reasoning value from `worker_dispatch\.assignments\[\]\.reasoning_effort`/i);
+  assert.match(skillSource, /7\+ confirmed pages.*do not require.*subagent/i);
   assert.match(workerReference, /Forked chat history is supplemental only/i);
   assert.match(workerReference, /A worker prompt that does not include the `style_lock` is invalid/i);
   assert.match(workerReference, /Every worker MUST receive the exact same `style_lock`/i);
@@ -240,7 +264,18 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(workerReference, /MUST NOT rely on inherited chat history as the only consistency mechanism/i);
   assert.match(workerReference, /MUST NOT call `spawn_agent` with `fork_context: true` when also setting `agent_type`/i);
   assert.match(workerReference, /Default shape is the lightweight context packet/i);
-  assert.match(workerReference, /set `reasoning_effort: "low"`/i);
+  assert.match(workerReference, /Protocol confirmation is the explicit user authorization.*bounded image-generation subagents/i);
+  assert.match(workerReference, /Do not ask for separate subagent permission/i);
+  assert.match(workerReference, /Before generating any page, count the confirmed protocol pages/i);
+  assert.match(workerReference, /If there are 7\+ confirmed pages and no spawn attempt has been made, STOP/i);
+  assert.match(workerReference, /10 pages is not a leader-only deck/i);
+  assert.match(workerReference, /Default reasoning_effort is `low`/i);
+  assert.match(workerReference, /Use `medium` only when/i);
+  assert.match(workerReference, /strict_embed/i);
+  assert.match(workerReference, /dense scientific\/table evidence/i);
+  assert.match(workerReference, /Do not use `high` or `xhigh`/i);
+  assert.match(workerReference, /reasoning_effort: "medium"/i);
+  assert.match(skillSource, /Default subagent reasoning is `low`; escalate to `medium` only/i);
   assert.match(workerReference, /If role-less forked spawn fails, or if a role\/reasoning override is required by the runtime, MUST omit `fork_context`/i);
   assert.match(workerReference, /Forking is optional only when the runtime benefits from extra history/i);
   assert.match(workerReference, /Each default worker packet contains only: verbatim `style_lock`/i);
@@ -253,10 +288,17 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(workerReference, /fallback to zero workers is allowed only after a concrete spawn unavailable\/blocked\/failed condition is observed/i);
   assert.match(workerReference, /MUST wait for subagent results or failure status before creating `png-manifest\.json`/i);
   assert.match(workerReference, /assigned page protocol slice/i);
-  assert.match(protocolReference, /optional `speaker_notes`/i);
+  assert.match(protocolReference, /`speaker_notes`: default speaker\/presenter talk track/i);
+  assert.match(protocolReference, /Generated protocols SHOULD include `speaker_notes` by default/i);
+  assert.match(protocolReference, /audience-specific talk tracks/i);
+  assert.match(protocolReference, /Visual consistency and metadata rules/i);
+  assert.match(protocolReference, /Do not allow page numbers to appear randomly/i);
+  assert.match(protocolReference, /asset ids, filenames, file paths, `source:`/i);
   assert.match(protocolReference, /Speaker notes MUST NOT be rendered inside the PNG/i);
   assert.match(protocolReference, /protocol -> `imagegen-jobs\.json` -> `png-manifest\.json` -> PPT speaker notes/i);
   assert.match(workerReference, /Directly call Codex built-in image generation/i);
+  assert.match(workerReference, /page-number\/footer policy/i);
+  assert.match(workerReference, /Do not render internal metadata/i);
   assert.match(workerReference, /missing `OPENAI_API_KEY` does not mean built-in `image_gen` is unavailable/i);
   assert.match(workerReference, /generate-assets --provider codex.*prompt-sheet handoff/i);
   assert.match(skillSource, /prompt sheet.*finished slide/i);
@@ -265,6 +307,10 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(skillSource, /no later PPT text overlay/i);
   assert.match(skillSource, /MCP as the internal tool layer/i);
   assert.match(toolsReference, /asset-index-create/i);
+  assert.match(toolsReference, /protocol-review/i);
+  assert.match(protocolReference, /Asset gate:/i);
+  assert.match(protocolReference, /Review artifact:/i);
+  assert.match(protocolReference, /reference-grounded protocol with `assets: \[\]` is invalid/i);
   assert.match(toolsReference, /imagegen-jobs-create/i);
   assert.match(skillSource, /visual-qa/i);
   assert.match(qaReference, /Visual review prompt template/i);
@@ -280,6 +326,7 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(toolsReference, /pptx_reference_intake/i);
   assert.match(toolsReference, /parse_paper_local/i);
   assert.match(toolsReference, /assemble_image_ppt/i);
+  assert.match(toolsReference, /setup_required: true/i);
   assert.match(fullSkillReference, /structured PPTX inventory\/reflow lane/i);
 
   const pluginManifest = JSON.parse(await readFile(path.join(pluginRoot, '.codex-plugin/plugin.json'), 'utf8'));
@@ -371,6 +418,46 @@ test('MCP wrappers load .env files without overriding shell environment', async 
   assert.equal(env.EXPLICIT_ONLY, '1');
   assert.equal(env.QUOTED_VALUE, 'hello world');
   assert.equal(env.INLINE_COMMENT, 'kept');
+});
+
+test('MinerU MCP wrapper stays discoverable when uvx is unavailable', async () => {
+  const nodeOnlyPath = path.dirname(process.execPath);
+  await withMcpClient({
+    command: process.execPath,
+    args: [mineruWrapperPath],
+    cwd: pluginRoot,
+    env: {
+      ...process.env,
+      PATH: nodeOnlyPath,
+    },
+  }, async (client) => {
+    const tools = await client.listTools();
+    const toolNames = tools.tools.map((tool) => tool.name).sort();
+    assert.deepEqual(toolNames, ['get_ocr_languages', 'parse_documents']);
+
+    const result = await client.callTool({ name: 'get_ocr_languages', arguments: {} });
+    const payload = JSON.parse(result.content[0].text);
+    assert.equal(payload.setup_required, true);
+    assert.match(payload.message, /uvx/i);
+    assert.ok(payload.languages.includes('en'));
+  });
+});
+
+test('installation docs explain new-thread startup and uvx MinerU fallback', async () => {
+  const englishReadme = await readFile(path.join(repoRoot, 'README.md'), 'utf8');
+  const chineseReadme = await readFile(path.join(repoRoot, 'README.zh-CN.md'), 'utf8');
+
+  assert.match(englishReadme, /start a new Codex thread/i);
+  assert.match(englishReadme, /uv\/uvx/i);
+  assert.match(englishReadme, /setup_required/i);
+  assert.match(englishReadme, /ppt-render-mcp/i);
+  assert.match(englishReadme, /mineru-open-mcp/i);
+
+  assert.match(chineseReadme, /新开.*Codex.*线程/);
+  assert.match(chineseReadme, /uv\/uvx/i);
+  assert.match(chineseReadme, /setup_required/i);
+  assert.match(chineseReadme, /ppt-render-mcp/i);
+  assert.match(chineseReadme, /mineru-open-mcp/i);
 });
 
 test('assemble-image-ppt builds one full-slide PNG per slide', async () => {
@@ -465,6 +552,7 @@ test('CLI help advertises enhancement commands', async () => {
   for (const command of [
     'reference-intake',
     'validate-deck-protocol',
+    'protocol-review',
     'protocol-add-asset',
     'protocol-bind-asset',
     'protocol-update-page',
@@ -495,6 +583,7 @@ test('MCP server registers enhancement tools', async () => {
     'parse_paper_local',
     'reference_intake',
     'validate_deck_protocol',
+    'protocol_review',
     'protocol_patch',
     'asset_index_create',
     'imagegen_jobs_create',
@@ -554,6 +643,8 @@ test('reference-intake writes deck protocol from mixed local references', async 
     protocolPath,
     '--title',
     'Protocol Demo',
+    '--audience',
+    'lab reviewers',
     '--pages',
     '3',
   ]);
@@ -574,10 +665,54 @@ test('reference-intake writes deck protocol from mixed local references', async 
   assert.ok(protocol.assets.some((asset) => asset.type === 'source_image'));
   assert.ok(protocol.assets.some((asset) => asset.type === 'source_table' && asset.path.endsWith('.png')));
   assert.ok(protocol.pages.every((page) => page.final_image_prompt && page.negative_prompt && page.output_png.endsWith('.png')));
+  assert.ok(protocol.pages.every((page) => page.speaker_notes && page.speaker_notes.length > 120));
+  assert.ok(protocol.pages.every((page) => page.speaker_notes.includes('lab reviewers')));
+  assert.ok(protocol.pages.every((page) => /asset ids|source labels|protocol metadata/i.test(page.negative_prompt)));
 
   const validation = await runCli(['validate-deck-protocol', '--protocol', protocolPath]);
   assert.equal(validation.ok, true);
   assert.equal(validation.pages, 3);
+
+  const reviewPath = path.join(outDir, 'deck-protocol.review.md');
+  const reviewResult = await runCli(['protocol-review', '--protocol', protocolPath, '--out', reviewPath]);
+  assert.equal(reviewResult.review, reviewPath);
+  const review = await readFile(reviewPath, 'utf8');
+  assert.match(review, /# Protocol Demo Review/);
+  assert.match(review, /## Assets/);
+  assert.match(review, /source_image/);
+  assert.match(review, /## Pages/);
+  assert.match(review, /Status: OK/);
+});
+
+test('reference-grounded protocol with source inputs cannot bypass empty assets', async () => {
+  const outDir = await mkdtemp(path.join(tmpdir(), 'ppt-composer-protocol-asset-gate-'));
+  const protocolPath = path.join(outDir, 'deck-protocol.json');
+  const protocol = {
+    kind: 'ppt-composer-deck-protocol',
+    version: '0.1',
+    mode: 'reference_grounded_mode',
+    source: { inputs: [path.join(outDir, 'paper.pdf')] },
+    deck: { title: 'Asset Gate Demo', language: 'zh', audience: 'lab', page_count: 1, aspect_ratio: '16:9' },
+    style: { description: 'consulting', template_image_ids: [], logo_ids: [], palette: [], typography: '' },
+    assets: [],
+    pages: [{
+      page: 1,
+      title: 'Page 1',
+      claim: 'Claim from reference.',
+      content_inputs: { text: [], tables: [], images: [] },
+      reference_asset_ids: [],
+      fidelity: 'free',
+      final_image_prompt: 'Create a complete full-slide image.',
+      negative_prompt: 'No fake numbers.',
+      output_png: 'dist/slides/slide-01.png',
+      free_generation: true,
+    }],
+  };
+  await writeFile(protocolPath, `${JSON.stringify(protocol, null, 2)}\n`);
+  await assert.rejects(
+    runCli(['validate-deck-protocol', '--protocol', protocolPath]),
+    /must include localized assets/,
+  );
 });
 
 test('protocol patch tools update assets, bindings, page fields, and fidelity with validation', async () => {
@@ -719,6 +854,17 @@ test('imagegen jobs gate manifest creation and visual QA blocks bad PNGs', async
   assert.match(jobsAfterCreate.style_lock.style.font_scale, /readable/);
   assert.match(jobsAfterCreate.style_lock.style.chart_style, /consulting\/research/);
   assert.match(jobsAfterCreate.style_lock.style.margins, /whitespace/);
+  assert.match(jobsAfterCreate.style_lock.style.page_number_policy, /consistent/i);
+  assert.match(jobsAfterCreate.style_lock.style.visible_text_policy, /asset ids/i);
+  assert.match(jobsAfterCreate.style_lock.format_contract.join(' '), /page number\/footer policy/i);
+  assert.match(jobsAfterCreate.style_lock.negative_contract.join(' '), /source labels/i);
+  assert.equal(jobsAfterCreate.worker_dispatch.required, true);
+  assert.equal(jobsAfterCreate.worker_dispatch.default_reasoning_effort, 'low');
+  assert.equal(jobsAfterCreate.worker_dispatch.assignments.length, 6);
+  assert.deepEqual(
+    jobsAfterCreate.worker_dispatch.assignments.flatMap((assignment) => assignment.pages),
+    Array.from({ length: 20 }, (_, index) => index + 1),
+  );
   assert.deepEqual(jobsAfterCreate.visualReview.dimensions, [
     'consistency',
     'protocol_alignment',
@@ -1098,6 +1244,10 @@ test('deck protocol validates references and drives visual-plan prompt slices', 
   assert.ok(visualPlan.requests.every((request) => request.protocolPage));
   assert.ok(visualPlan.requests.some((request) => request.fidelity === 'strict_embed'));
   assert.ok(visualPlan.requests.every((request) => /Fidelity mode:/i.test(request.prompt)));
+  assert.ok(visualPlan.requests.every((request) => /Page numbering policy:/i.test(request.prompt)));
+  assert.ok(visualPlan.requests.every((request) => /Do not render internal evidence labels/i.test(request.prompt)));
+  assert.ok(visualPlan.requests.every((request) => !/tbl-1:/i.test(request.prompt)));
+  assert.ok(visualPlan.requests.every((request) => !/Grounding evidence:.*source table/i.test(request.prompt)));
 
   const manifestResult = await runCli([
     'generate-assets',

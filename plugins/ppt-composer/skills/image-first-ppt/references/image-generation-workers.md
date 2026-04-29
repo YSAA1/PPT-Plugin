@@ -20,10 +20,18 @@ Primary path: Codex built-in image generation via the installed `imagegen` skill
 - `generate-assets --provider codex` is only a prompt-sheet handoff, not image generation.
 - `generate-assets --provider openai` is an explicit API fallback.
 - If imagegen workers fail or return prompt-only output, retry or generate directly. MUST NOT assemble placeholders.
-- Treat protocol confirmation as authorization to use bounded image-generation subagents for the confirmed pages only when parallelism is worth the local startup cost.
+- Protocol confirmation is the explicit user authorization to use bounded image-generation subagents for the confirmed pages. Do not ask for separate subagent permission, and do not wait for the user to say "subagent", "worker", or "parallel".
 - In Codex App/plain Codex sessions, subagents may initialize the same plugin MCP servers as the leader. Do not spawn many image workers if that would multiply `ppt-render-mcp`, `mineru-open-mcp`, `uvx`, or Python startup.
-- For multi-page decks, prefer the leader or a small bounded worker batch when local MCP startup is expensive. Record the reason when choosing direct generation over subagents.
+- For 2-6 page decks, prefer the leader or a small bounded worker batch when local MCP startup is expensive. Record the reason when choosing direct generation over subagents.
+- For 7+ page decks, parallelism is worth the local startup cost by default; reduce worker count only for a concrete spawn/runtime blocker.
 - The leader MUST NOT silently ignore failed subagent spawning; if fallback is used, record whether it was due to runtime rejection, MCP startup cost, or imagegen failure.
+
+Worker dispatch decision gate:
+
+- Before generating any page, count the confirmed protocol pages.
+- Create `imagegen-jobs.json` first and inspect `worker_dispatch.assignments`.
+- If there are 7+ confirmed pages and no spawn attempt has been made, STOP before direct generation and attempt worker dispatch from `worker_dispatch.assignments` first.
+- 10 pages is not a leader-only deck; it is in the 7-12 page lane and MUST use the default worker split unless spawn is unavailable, blocked, or a concrete spawn attempt fails.
 
 Leader must split work as follows:
 
@@ -43,7 +51,9 @@ Subagent runtime and model rules:
 - If a page range would exceed the maximum wait time, split the range into smaller subagent tasks.
 - Prefer more parallel one-page workers over long sequential multi-page workers when the deck has 2-6 pages.
 - For 7+ pages, keep at most 6 concurrent subagents, but size each consecutive range so the range fits inside the wait budget.
-- Image workers SHOULD use low reasoning when the spawn API shape allows it. The worker is executing a fixed image prompt, not planning the deck.
+- Default reasoning_effort is `low`. The worker is executing a fixed image prompt, not planning the deck.
+- Use `medium` only when the assigned page has `strict_embed` fidelity, dense scientific/table evidence, multiple reference assets that must be reconciled, a prior generation failure/revision, or an explicit user request for extra care on that page.
+- Do not use `high` or `xhigh` for image workers unless the user explicitly asks for deep reasoning; high reasoning is usually wasted and increases the chance that a worker redesigns the page instead of executing the confirmed protocol.
 - When `fork_context: true` is used, DO NOT set `reasoning_effort`; the current runtime can reject full-history fork calls that also set reasoning effort.
 - The leader may use stronger reasoning for planning, but worker prompts MUST stay narrow and execution-focused.
 
@@ -51,7 +61,9 @@ Shared context rules:
 
 - Before spawning workers, the leader MUST create one shared deck generation context from the confirmed protocol: deck title, audience, aspect ratio, global style, palette, typography, logo/template asset ids, page list, global negative rules, QA acceptance rules, and asset index.
 - `imagegen-jobs.json` MUST contain a `style_lock` object. Treat that object as the canonical shared visual contract for all image-generation and visual-review workers.
+- `imagegen-jobs.json` MUST contain `worker_dispatch`. For 7+ pages, `worker_dispatch.required` MUST be true and `worker_dispatch.assignments` MUST be non-empty before any direct generation fallback.
 - `style_lock` MUST include stable visual fields for layout density, font/size tendency, palette, chart style, margins/whitespace, and forbidden items.
+- `style_lock` MUST include one page-number/footer policy and one visible-text policy. Workers must follow the same footer policy on every assigned page.
 - Every worker MUST receive the exact same `style_lock` plus only its assigned page protocol slice and relevant reference asset paths.
 - MUST NOT rely on inherited chat history as the only consistency mechanism.
 - Forked chat history is supplemental only. If fork history fails, is unavailable, or differs between workers, consistency MUST still come from the explicit `style_lock`.
@@ -60,7 +72,9 @@ Shared context rules:
 
 Spawn call rules:
 
-- Default shape is the lightweight context packet: omit `fork_context` or set `fork_context: false`, set `reasoning_effort: "low"`, and put the shared deck generation context plus assigned page context in the worker prompt.
+- Default shape is the lightweight context packet: omit `fork_context` or set `fork_context: false`, set `reasoning_effort: "low"` for normal pages, and put the shared deck generation context plus assigned page context in the worker prompt.
+- Use the reasoning value from `worker_dispatch.assignments[].reasoning_effort`; it is normally `low` and only `medium` for the documented escalation cases.
+- For the medium-only escalation cases above, set `reasoning_effort: "medium"` and record the reason in the worker assignment or job note.
 - Each default worker packet contains only: verbatim `style_lock`, assigned page protocol slice, relevant reference asset paths, output PNG path, and the execution checklist.
 - Forking is optional only when the runtime benefits from extra history. If `fork_context: true` is used, DO NOT set `reasoning_effort`.
 - MUST NOT call `spawn_agent` with `fork_context: true` when also setting `agent_type` / role.
@@ -94,6 +108,13 @@ spawn_agent({
   message: "<worker prompt with shared deck generation context, assigned page protocol slice, and reference paths>"
 })
 
+Medium escalation for complex evidence/fidelity page:
+spawn_agent({
+  reasoning_effort: "medium",
+  fork_context: false,
+  message: "<worker prompt with medium reason: strict_embed / dense table evidence / multiple references / prior generation failure>"
+})
+
 Forbidden:
 spawn_agent({
   agent_type: "<any role>",
@@ -122,7 +143,9 @@ Scope:
 - Do not create PPTX, SVG, HTML, markdown, placeholder art, or prompt-only artifacts.
 - Follow the shared deck generation context exactly so pages are visually consistent with other workers.
 - Treat `speaker_notes` as presenter-only notes; do not render them as visible slide text.
-- Use low reasoning only; focus on direct image generation, not analysis.
+- Use low reasoning by default, or medium only when the assignment explicitly states the page meets the escalation rule; focus on direct image generation, not deck planning.
+- Do not render internal metadata such as asset ids, filenames, file paths, `source:`, `source table`, `reference asset`, or protocol field names.
+- Keep page numbers/footers consistent with the shared `style_lock`; do not add or omit page numbers ad hoc.
 
 Shared deck generation context:
 - Style lock:
@@ -133,6 +156,8 @@ Shared deck generation context:
 - Global style: <style description>
 - Palette: <colors>
 - Typography: <fonts and text style>
+- Page number/footer policy: <style_lock.style.page_number_policy>
+- Visible text policy: <style_lock.style.visible_text_policy>
 - Logos/template assets: <ids and paths>
 - Full page list: <page numbers and titles/claims>
 - Global negative rules: <rules shared by all pages>

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { renderPptx } from "./render-pptx.mjs";
 import { runQa } from "./qa-pptx.mjs";
@@ -18,6 +18,7 @@ import { createAssetIndex } from "./asset-index.mjs";
 import { createJobsFile, backfillJobsFile, reviewJobsFile, reviseJobsFile, jobsToManifestFile, summarizeJobs } from "./imagegen-jobs.mjs";
 import { runVisualQaFile } from "./visual-qa.mjs";
 import { pptxReferenceIntake } from "./pptx-reference-intake.mjs";
+import { createProtocolReview } from "./protocol-review.mjs";
 import { readJson, resolvePath, writeJson } from "./lib.mjs";
 
 const USAGE = `
@@ -30,6 +31,7 @@ Usage:
   ppt-composer parse-paper --input <paper.pdf|paper.md> --out-dir <parse-dir> [--lang en|ch]
   ppt-composer reference-intake --out-dir <work-dir> --protocol-out <deck-protocol.json> [--inputs <ref1> <ref2> ...] [--title <title>] [--pages 8]
   ppt-composer validate-deck-protocol --protocol <deck-protocol.json> [--require-generated-png]
+  ppt-composer protocol-review --protocol <deck-protocol.json> --out <deck-protocol.review.md>
   ppt-composer protocol-add-asset --protocol <deck-protocol.json> --asset <asset-json> [--audit-note <note>]
   ppt-composer protocol-bind-asset --protocol <deck-protocol.json> --page <n> --asset-id <id> [--input-type text|tables|images]
   ppt-composer protocol-update-page --protocol <deck-protocol.json> --page <n> --patch <json>
@@ -212,6 +214,17 @@ async function main() {
       throw new Error(`Invalid deck protocol:\n${report.errors.join("\n")}`);
     }
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "protocol-review") {
+    const protocolPath = resolvePath(requireArg(args, "protocol"));
+    const outPath = resolvePath(requireArg(args, "out"));
+    const protocol = await readJson(protocolPath);
+    const review = createProtocolReview(protocol, { protocolPath });
+    await mkdir(path.dirname(outPath), { recursive: true });
+    await writeFile(outPath, review, "utf8");
+    process.stdout.write(`${JSON.stringify({ review: outPath }, null, 2)}\n`);
     return;
   }
 

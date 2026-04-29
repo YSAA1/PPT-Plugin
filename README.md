@@ -20,176 +20,72 @@
   <img alt="license" src="https://img.shields.io/badge/license-MIT-black">
 </p>
 
-PPT Composer is a Codex plugin that turns briefs and reference files into polished PowerPoint decks. It creates a reviewable protocol first, generates one complete image per slide, and assembles those images into a `.pptx`.
+PPT Composer is a Codex plugin for making image-first PowerPoint decks. You give Codex a brief, reference files, audience, style, and page count; the plugin plans the deck, asks you to review the plan, generates one complete PNG for each slide, and assembles those PNGs into a `.pptx`.
 
-It is built for users who want a clean final deck, not a folder of prompts, placeholders, or half-finished slide backgrounds.
+Use it when you want a polished deck that can be opened, presented, and shared immediately. It is not a native editable-slide generator: every final slide is one full-slide image.
 
 <p align="center">
   <img src="assets/ppt-composer-system-overview.png" alt="PPT Composer system overview">
 </p>
 
-## New User Guide
+## Workflow
 
-If the protocol and QA rules feel abstract, start here:
+1. **Describe the deck**: topic, audience, page count, language, visual style, output folder, and any reference files.
+2. **Parse references**: PDFs, images, tables, Markdown, Word files, and text briefs are converted into usable deck evidence.
+3. **Review the protocol**: Codex writes `deck-protocol.json` and a readable `deck-protocol.review.md` summary before any image generation.
+4. **Revise in plain language**: ask Codex to change page claims, bind figures, adjust fidelity, improve notes, or change the page-number policy.
+5. **Confirm the protocol**: generation starts only after the plan is ready and approved.
+6. **Generate slides**: each page becomes one finished PNG. Larger decks use bounded subagents for per-page image generation when available.
+7. **Assemble and QA**: the plugin checks that every planned page has a real PNG, then creates the final PPTX.
 
-- [Chinese user guide](docs/user_guid/README.md) explains the rules with diagrams.
-- [Current use cases](docs/user_guid/current-use-cases.zh-CN.md) shows practical prompts for papers, reports, reference images, strict figure pages, and page-by-page revision.
+The protocol is the contract: it records assets, page claims, reference bindings, fidelity mode, speaker notes, and output paths. If reference files are supplied, they must appear as assets and be bound to relevant pages before confirmation.
 
-<p align="center">
-  <img src="docs/user_guid/images/workflow-overview.png" alt="PPT Composer user workflow">
-</p>
+## Daily Use
 
-## Who It Is For
-
-Use PPT Composer when you want to:
-
-- turn a paper, PDF, report, Markdown file, image, or table into a presentation;
-- make a visually consistent research, project, product, or consulting-style deck;
-- review the deck plan before image generation starts;
-- export a PowerPoint file that is ready to open, present, and share.
-
-The public entry point is:
+In Codex, call the public skill:
 
 ```text
-ppt-composer:image-first-ppt
+Use ppt-composer:image-first-ppt.
+Create a <N>-slide deck from <brief/reference files>.
+Audience: <who will listen>.
+Language: <English/Chinese/etc.>.
+Style: <academic / consulting / product / visual direction>.
+Important requirements: <must-keep figures, logos, tables, page numbers, notes style>.
+Output folder: <path>.
 ```
 
-## How It Works
+Example:
 
 ```text
-brief and references
-  -> deck-protocol.json
-  -> protocol patch tools
-  -> localized asset index
-  -> imagegen job manifest
-  -> deterministic QA and visual review
-  -> complete PNG manifest
-  -> PPTX
+Use ppt-composer:image-first-ppt.
+Create a 10-slide Chinese academic report from ./paper.pdf and ./figures/.
+Audience: robotics lab meeting.
+Style: clean research-consulting, dark blue accents, clear evidence panels.
+Requirements: keep the main result figure accurate, use speaker notes for a 5-minute talk, and use consistent page numbers.
+Output folder: ./out/ppt-composer-demo.
 ```
 
-The final PPTX contains one full-slide PNG per page. Slide text, titles, charts, labels, logos, and layout are all inside that image. PPT Composer does not generate a background first and add PowerPoint text later.
+Typical follow-up requests:
 
-## The Protocol File
+- “Make page 6 strict_embed and bind it to the main result figure.”
+- “Remove visible source labels and internal asset ids from all slide images.”
+- “Use page numbers on every slide except the cover.”
+- “Rewrite speaker notes for a grant-review audience; make each note a real talk track, not one sentence.”
+- “Regenerate only page 4 because the chart label is unclear.”
 
-`deck-protocol.json` is the source of truth before generation. It defines:
+Useful user guides:
 
-- deck title, language, audience, page count, and aspect ratio;
-- global visual style;
-- reference assets;
-- page titles and claims;
-- evidence bindings;
-- per-page image prompts;
-- optional speaker notes;
-- output PNG paths.
-
-Pages reference assets by id:
-
-```json
-{
-  "assets": [
-    {
-      "id": "fig-1",
-      "type": "source_image",
-      "path": "reference-assets/fig-1.png",
-      "caption": "Main result figure"
-    }
-  ],
-  "pages": [
-    {
-      "page": 3,
-      "title": "Main Result",
-      "claim": "The method improves sim-to-real transfer under heavy load.",
-      "content_inputs": {
-        "text": ["txt-2"],
-        "tables": [],
-        "images": ["fig-1"]
-      },
-      "reference_asset_ids": ["fig-1"],
-      "fidelity": "strict_embed",
-      "speaker_notes": "Explain the transfer result and call out the heavy-load condition.",
-      "output_png": "dist/slides/slide-03.png"
-    }
-  ]
-}
-```
-
-Do not put raw image paths in `content_inputs`. Put files in `assets`, then reference their ids from pages.
-Use `speaker_notes` for presenter notes. It is carried into PowerPoint speaker notes and is not rendered as visible slide text. Existing protocols using `notes`, `remarks`, `presenter_notes`, or `备注` are accepted as aliases.
-
-PPT Composer keeps protocol edits and generation state in internal files:
-
-| File | Purpose |
-| --- | --- |
-| `reference-assets/asset-index.json` | Localized reference files and URLs with stable ids, hash, MIME, size, caption, and usage. |
-| `imagegen-jobs.json` | Per-page generation state. `deck-protocol.json` remains the content source of truth. |
-| `visual-qa.json` | PNG checks plus visual review findings. It records missing/tiny/placeholder PNGs, consistency issues, protocol drift, and basic generated-image problems. |
-| `png-manifest.json` | Final assembly gate. It exists only after every planned page has a real generated PNG. |
-
-### Revising The Protocol
-
-You normally revise the protocol by telling Codex what to change in plain language. You do not need to memorize CLI commands.
-
-Example user requests:
-
-```text
-Change page 6 to strict_embed and bind it to fig-3.
-```
-
-```text
-Rename page 3 to "Core Experiment Result" and make the claim focus on sample efficiency.
-```
-
-```text
-Use logo-1 on every page, but keep page 2 free_generation.
-```
-
-Codex converts those requests into validated protocol patch operations. Internally it uses tools such as:
-
-```bash
-ppt-composer protocol-bind-asset --protocol output/deck-protocol.json --page 6 --asset-id fig-3
-ppt-composer protocol-set-fidelity --protocol output/deck-protocol.json --page 6 --fidelity strict_embed
-ppt-composer protocol-update-page --protocol output/deck-protocol.json --page 3 --patch '{"title":"Core Experiment Result"}'
-```
-
-Each patch is checked before it is saved. The tool rejects unknown pages, unknown asset ids, duplicate asset ids, and illegal fidelity values. It also pretty-prints `deck-protocol.json`, keeps the protocol valid, and records an `audit_log`.
-
-Manual JSON editing is possible, but the recommended workflow is: describe the revision to Codex, let Codex patch the protocol, then review the updated protocol summary before image generation.
-
-### Fidelity Modes
-
-| Mode | Meaning |
-| --- | --- |
-| `free` | Generate from the approved brief and style. |
-| `light_redraw` | Redraw and restyle while preserving facts, trends, and key numbers. |
-| `strict_embed` | Keep referenced figures, logos, table headers, values, and captions as visual evidence. |
-
-## Supported References
-
-| Input | Use |
-| --- | --- |
-| PDF | Papers and reports, preferably through MinerU |
-| Markdown | Outlines and notes |
-| DOCX | Word documents |
-| TXT | Plain-text briefs |
-| PNG/JPG/WebP | Figures, logos, and style references |
-| CSV/TSV | Tables and numeric evidence |
-
-## Examples
-
-The repository includes two generated PowerPoint examples:
-
-| Example | Description |
-| --- | --- |
-| [halo-academic-tsinghua.pptx](plugins/ppt-composer/examples/decks/halo-academic-tsinghua.pptx) | A Chinese academic research report deck with a Tsinghua-style visual direction. |
-| [codex-introduction.pptx](plugins/ppt-composer/examples/decks/codex-introduction.pptx) | A Codex introduction deck generated as an image-first PPTX. |
+- [Chinese user guide](docs/user_guid/README.md)
+- [Current use cases](docs/user_guid/current-use-cases.zh-CN.md)
 
 ## Installation
 
 Requirements:
 
-- Node.js 20+
 - Codex with plugin support
-- Optional MinerU token for higher-quality document parsing
+- Node.js 20+
+- Optional: `uv/uvx` if you want MinerU-backed PDF, Office, or image parsing
+- Optional: MinerU token for higher document-parsing limits
 
 ### Install from GitHub
 
@@ -197,13 +93,15 @@ Requirements:
 codex plugin marketplace add YSAA1/PPT-Plugin
 ```
 
-Then open Codex and install the plugin from the plugin browser:
+Then open Codex and install it from:
 
 ```text
 /plugins
 ```
 
-Choose the `PPT Composer` marketplace entry and select `Install plugin`.
+Choose **PPT Composer** and select **Install plugin**.
+
+After installing, **start a new Codex thread** so the bundled skill and MCP servers are loaded. If the plugin browser or an older Codex session was already open, restart Codex before testing the plugin.
 
 ### Install from a local clone
 
@@ -213,174 +111,39 @@ cd PPT-Plugin
 codex plugin marketplace add .
 ```
 
-Then run:
+Then open `/plugins`, choose **PPT Composer**, and select **Install plugin**. Start a new Codex thread after installation.
 
-```text
-/plugins
-```
+## Outputs and Quality Boundaries
 
-Open `PPT Composer` and select `Install plugin`.
+- Final PPTX: one full-slide PNG per page, with no PowerPoint text overlays.
+- Speaker notes: generated by default from the audience and page content, then saved into PowerPoint notes.
+- Review copy: `deck-protocol.review.md` summarizes the protocol for human review.
+- Asset discipline: referenced images, tables, logos, and figures must be registered as protocol assets before use.
+- Visual consistency: page numbers, footers, style, and metadata visibility are controlled by the protocol.
+- No visible internals: slide images should not show raw filenames, asset ids, `source:` labels, file paths, or parser field names.
+- Strict evidence mode: `strict_embed` pages must preserve referenced numbers, labels, logos, table headers, and captions.
 
-PPT Composer bundles its skill and MCP server configuration as a Codex plugin. On first MCP startup, the Node MCP wrapper automatically installs missing runtime npm dependencies inside the installed plugin cache. Install logs are written to stderr so they do not pollute the MCP stdio protocol channel.
+## Troubleshooting
 
-### Dependency Prewarm
+**The skill or MCP tools do not appear after install.**
+Start a new Codex thread or restart Codex. The plugin registers the `ppt-composer:image-first-ppt` skill plus two MCP servers: `ppt-render-mcp` for rendering/assembly/QA and `mineru-open-mcp` for document parsing.
 
-Prewarm means preparing the plugin's local runtime dependencies after install or update, before Codex starts the MCP servers. It is optional for most users, because the Node wrapper auto-installs missing npm dependencies once. It is useful when a slow network makes first MCP startup time out, or when you want to warm MinerU's `uvx` environment before using document parsing.
+**`mineru-open-mcp` says `setup_required: true`.**
+Install `uv/uvx`, then restart Codex. The core `ppt-render-mcp` server can still handle PPTX assembly even if MinerU parsing is not ready.
 
-If you are developing from a clone, or if first MCP startup reports missing dependencies, run:
+**The final PPTX is hard to edit.**
+That is expected for image-first output. Use this plugin when visual consistency and presentation readiness matter more than native PowerPoint editability.
 
-```bash
-cd plugins/ppt-composer
-npm run prewarm
-```
+**The protocol looks wrong.**
+Do not generate yet. Ask Codex to revise the protocol in plain language, then re-check `deck-protocol.review.md` before confirming image generation.
 
-If you installed the plugin through Codex and the MCP error prints an installed plugin path, run the same command in that printed plugin root:
+## Examples
 
-```bash
-cd <installed-plugin-root>
-npm run prewarm
-```
+| Example | Description |
+| --- | --- |
+| [halo-academic-tsinghua.pptx](plugins/ppt-composer/examples/decks/halo-academic-tsinghua.pptx) | Chinese academic research report deck with a Tsinghua-style visual direction. |
+| [codex-introduction.pptx](plugins/ppt-composer/examples/decks/codex-introduction.pptx) | Codex introduction deck generated as an image-first PPTX. |
 
-If you will use MinerU parsing, also warm the `uvx` MinerU environment:
+## License
 
-```bash
-npm run prewarm:mineru
-```
-
-After prewarming, restart Codex so it starts MCP servers from the warm dependency cache.
-
-The MCP startup wrappers are cross-platform Node scripts. On Windows they call `npm.cmd` / `uvx.cmd` and the plugin parses DOCX/PPTX with JSZip instead of requiring a system `unzip` command.
-
-Plugin manifest:
-
-```text
-plugins/ppt-composer/.codex-plugin/plugin.json
-```
-
-MCP config:
-
-```text
-plugins/ppt-composer/.mcp.json
-```
-
-## Optional Environment
-
-Environment variables are optional. They are only needed for higher-quality MinerU parsing or an explicit OpenAI Images API fallback.
-
-Supported configuration methods, from highest to lowest priority:
-
-1. System or shell environment variables inherited by Codex.
-2. A custom env file pointed to by `PPT_COMPOSER_ENV_FILE`.
-3. `.env` in the local repository root, useful when developing from a clone.
-4. `plugins/ppt-composer/.env`, useful inside the plugin package or installed plugin cache.
-
-Existing system or shell variables are never overwritten by `.env` files.
-
-Linux/macOS shell example:
-
-```bash
-export MINERU_API_TOKEN="..."
-export OPENAI_API_KEY="..."
-```
-
-Windows PowerShell example:
-
-```powershell
-$env:MINERU_API_TOKEN="..."
-$env:OPENAI_API_KEY="..."
-```
-
-Plugin-local `.env` example:
-
-```bash
-cp plugins/ppt-composer/.env.example plugins/ppt-composer/.env
-```
-
-Then edit the new `.env` file:
-
-```bash
-MINERU_API_TOKEN=...
-OPENAI_API_KEY=...
-```
-
-To keep secrets outside the repository, point the plugin at a private env file:
-
-```bash
-export PPT_COMPOSER_ENV_FILE="$HOME/.config/ppt-composer/env"
-```
-
-Notes:
-
-- `MINERU_API_TOKEN` enables MinerU Precision parsing.
-- `OPENAI_API_KEY` is only needed for an explicit OpenAI Images API fallback.
-- Codex built-in `$imagegen` does not require a local `OPENAI_API_KEY`.
-
-## Usage
-
-Ask Codex:
-
-```text
-Use ppt-composer:image-first-ppt.
-Create a 10-page research presentation from reference/paper.pdf and reference/logo.png.
-Style: polished academic consulting, 16:9, Chinese main language with bilingual key headings.
-Every slide must be one complete PNG. Do not add PowerPoint text overlays.
-Output to output/report.pptx.
-```
-
-Expected flow:
-
-1. Codex asks for missing requirements.
-2. References are parsed.
-3. `deck-protocol.json` is created.
-4. You review the protocol and ask for revisions in plain language if needed.
-5. Codex applies validated protocol patches and shows the updated plan.
-6. You explicitly confirm the protocol.
-7. Codex generates one PNG per page.
-8. Deterministic QA and visual review run. Multi-page decks should use a bounded vision/reviewer subagent for review.
-9. Failed pages are revised page by page. The protocol is patched first when prompt or fidelity rules need to change.
-10. A complete PNG manifest is created only after every required page is generated, or accepted when visual review is enabled.
-11. The PPTX is assembled after all PNGs pass the gate.
-
-## Quality Rules
-
-PPT Composer rejects:
-
-- prompt-only output;
-- background-only images;
-- SVG or HTML screenshots as final slides;
-- placeholders;
-- PPTX assembly before every PNG exists;
-- altered figures, numbers, logos, or table headers in `strict_embed` pages.
-- visual-review failures such as inconsistent style, protocol drift, unreadable text, watermarking, malformed tables/logos, blank regions, or background-only output.
-
-When only one page fails, PPT Composer should revise that page instead of regenerating the whole deck.
-
-## Verify
-
-```bash
-cd plugins/ppt-composer
-npm run test:enhancement
-```
-
-## Repository Layout
-
-```text
-PPT-Plugin/
-├── README.md
-├── README.zh-CN.md
-├── .agents/plugins/marketplace.json
-├── assets/
-│   ├── ppt-composer-logo.svg
-│   └── ppt-composer-system-overview.png
-└── plugins/
-    └── ppt-composer/
-        ├── .codex-plugin/plugin.json
-        ├── .mcp.json
-        ├── assets/
-        ├── examples/decks/
-        ├── package.json
-        ├── scripts/
-        ├── skills/image-first-ppt/
-        ├── src/
-        └── tests/
-```
+MIT. See [LICENSE](LICENSE).

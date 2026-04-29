@@ -18,12 +18,14 @@ const SEVERITY = { pass: 0, warn: 1, fail: 2 };
 export function createImagegenJobs(protocol, { protocolPath = null, outPath = null } = {}) {
   const pages = protocol.pages || [];
   const styleLock = buildStyleLock(protocol);
+  const workerDispatch = buildWorkerDispatch(pages);
   return {
     kind: "ppt-composer-imagegen-jobs",
     version: "0.1",
     createdAt: new Date().toISOString(),
     protocol: protocolPath || protocol.source?.protocolPath || null,
     style_lock: styleLock,
+    worker_dispatch: workerDispatch,
     visualReview: {
       enabled: false,
       dimensions: REVIEW_DIMENSIONS,
@@ -64,6 +66,58 @@ export function createImagegenJobs(protocol, { protocolPath = null, outPath = nu
     })),
     outPath,
   };
+}
+
+function buildWorkerDispatch(pages) {
+  const pageCount = pages.length;
+  const required = pageCount >= 7;
+  const assignments = required ? splitWorkerAssignments(pages) : [];
+  return {
+    required,
+    reason: required
+      ? "7+ confirmed pages require bounded image-generation subagent dispatch before direct generation fallback"
+      : "leader generation or a small worker batch is allowed for 1-6 pages",
+    max_concurrency: required ? Math.min(6, assignments.length) : Math.min(2, pageCount),
+    default_reasoning_effort: "low",
+    medium_escalation_rule: "strict_embed, dense table/scientific evidence, multiple reference assets, prior failure, or explicit user extra-care request",
+    assignments,
+    fallback_requires_recorded_spawn_blocker: required,
+  };
+}
+
+function splitWorkerAssignments(pages) {
+  const pageCount = pages.length;
+  const workerCount = pageCount <= 12 ? Math.min(6, Math.max(5, Math.ceil(pageCount / 2))) : 6;
+  const assignments = [];
+  for (let workerIndex = 0; workerIndex < workerCount; workerIndex += 1) {
+    const start = Math.floor((workerIndex * pageCount) / workerCount);
+    const end = Math.floor(((workerIndex + 1) * pageCount) / workerCount);
+    const slice = pages.slice(start, end);
+    if (!slice.length) continue;
+    const pageNumbers = slice.map((page) => Number(page.page));
+    const mediumReasons = slice.flatMap((page) => mediumReasonsForPage(page).map((reason) => `p${page.page}:${reason}`));
+    assignments.push({
+      id: `image-worker-${String(assignments.length + 1).padStart(2, "0")}`,
+      pages: pageNumbers,
+      page_range: pageNumbers.length === 1 ? String(pageNumbers[0]) : `${pageNumbers[0]}-${pageNumbers.at(-1)}`,
+      reasoning_effort: mediumReasons.length ? "medium" : "low",
+      medium_reason: mediumReasons.join("; "),
+      status: "planned",
+      spawn_attempt: null,
+    });
+  }
+  return assignments;
+}
+
+function mediumReasonsForPage(page = {}) {
+  const reasons = [];
+  if (page.fidelity === "strict_embed") reasons.push("strict_embed");
+  const tableCount = page.content_inputs?.tables?.length || 0;
+  const imageCount = page.content_inputs?.images?.length || 0;
+  const referenceCount = page.reference_asset_ids?.length || 0;
+  if (tableCount) reasons.push("table_evidence");
+  if (imageCount + referenceCount > 1) reasons.push("multiple_reference_assets");
+  return reasons;
 }
 
 export function summarizeJobs(jobs, { requireAccepted = null } = {}) {
@@ -471,6 +525,8 @@ function buildStyleLock(protocol = {}) {
       font_scale: style.font_scale || style.font_size_tendency || "readable slide-scale titles and labels",
       chart_style: style.chart_style || "clean consulting/research charts with legible labels",
       margins: style.margins || style.whitespace || "consistent margins and controlled whitespace",
+      page_number_policy: style.page_number_policy || style.pageNumberPolicy || "consistent: either no page numbers, or the same small bottom-right page/total footer on every slide except a deliberate cover exemption",
+      visible_text_policy: style.visible_text_policy || style.visibleTextPolicy || "visible slide text must not include asset ids, filenames, file paths, source labels, or protocol metadata",
       template_image_ids: style.template_image_ids || [],
       logo_ids: style.logo_ids || [],
       forbidden: style.forbidden || [],
@@ -488,12 +544,14 @@ function buildStyleLock(protocol = {}) {
       "All visible title, claim, labels, chart text, captions, and logos must be rendered inside the PNG.",
       "Do not create a blank background, prompt-only handoff, SVG, HTML screenshot, or later PowerPoint text overlay.",
       "Use the same visual system, typography, palette, density, margins, and hierarchy across all pages.",
+      "Use one consistent page number/footer policy across the deck; do not randomly add page numbers to only some pages.",
       "Do not invent or alter facts, numbers, curves, table headers, logos, or captions on strict_embed pages.",
     ],
     negative_contract: [
       "No watermark.",
       "No unreadable text.",
       "No inconsistent per-page art direction.",
+      "No visible asset ids, filenames, file paths, source labels, protocol field names, or 'source: ... table' metadata.",
       "No decorative clutter that breaks the confirmed deck style.",
       "No background-only slide.",
     ],
