@@ -36,7 +36,7 @@ MUST satisfy all rules:
 Execute in this exact order. Do not skip forward.
 
 1. Requirement Gate: before creating `deck-protocol.json`, all required fields below MUST be known or explicitly marked "user does not care"; if any required field is missing, ask only for the missing fields and STOP.
-2. Reference Asset Gate: if reference files exist, first parse PDF/Office/image documents with `mineru-open-mcp.parse_documents` when they need OCR or document extraction, saving Markdown plus `image_paths` under the work directory. Full MinerU token mode returns extracted figures; Flash mode MUST still return local image assets for PDFs/images when possible through page-image/input-image fallback. Then run `reference_intake` / CLI `reference-intake` on the produced Markdown/images (or `pptx_reference_intake` for PPTX references) before drafting or confirming the protocol. The resulting `reference-assets/asset-index.json` and localized protocol `assets` are mandatory. If there are no references, record brief-only mode explicitly.
+2. Reference Asset Gate: if reference files exist, first run `ppt_composer_doctor` / CLI `doctor` to check `uvx`, MinerU token mode, MCP timeouts, and PDF fallback readiness. Then parse PDF/Office/image documents with `mineru-open-mcp.parse_documents` when they need OCR or document extraction, saving Markdown plus `image_paths` under the work directory. Full MinerU token mode returns extracted figures; Flash mode MUST still return local image assets for PDFs/images when possible through page-image/input-image fallback. Then run `reference_intake` / CLI `reference-intake` on the produced Markdown/images (or `pptx_reference_intake` for PPTX references) before drafting or confirming the protocol. The resulting `reference-assets/asset-index.json` and localized protocol `assets` are mandatory. If there are no references, record brief-only mode explicitly.
 3. Create or update `deck-protocol.json` from the intake output. Read [references/protocol.md](references/protocol.md).
 4. Validate `deck-protocol.json`. In reference-grounded mode, `assets: []` or pages that never bind localized assets are blockers, not acceptable review drafts.
 5. Patch revisions only through protocol patch tools. If patch tools are unavailable, record the reason, edit the protocol directly, and immediately rerun `validate-deck-protocol`.
@@ -52,6 +52,8 @@ Execute in this exact order. Do not skip forward.
 Hard stop conditions:
 
 - If protocol is not confirmed, STOP before image generation.
+- If references exist but `ppt_composer_doctor` reports MinerU unavailable for required PDF/Office/image parsing, STOP and report the setup action.
+- If `mineru-open-mcp.parse_documents` times out, inspect the requested `output_dir`; if Markdown plus images were written, continue from those artifacts instead of treating the parse as failed.
 - If references exist but `assets` is empty, `reference-assets/asset-index.json` is missing, or no page binds extracted assets, STOP before confirmation.
 - If `deck-protocol.review.md` is missing, STOP before asking for protocol confirmation.
 - If 7+ confirmed pages exist and no worker dispatch/spawn attempt has been made, STOP before direct generation.

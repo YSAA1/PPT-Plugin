@@ -35,7 +35,7 @@ Existing-PPT hard-preservation requests are a different product lane:
 - Supported conservative fallback: embed each original full-slide screenshot as locked evidence, then only add external framing if the user accepts that the internal page layout will not be reflowed.
 - Otherwise stop before generation and explain that the missing capability is a structured PPTX inventory/reflow lane: parse each page's text, images, charts, tables, positions, z-order, and styles; optimize layout using those locked objects; then run exactness QA.
 
-Use `mineru-open-mcp.parse_documents` first for PDF/Office/scanned/image documents that require extraction, then feed the saved Markdown and returned image assets (`image_paths`, including extracted figures or page-image/input-image fallback) into `reference-intake` / `pptx-reference-intake` before drafting or confirming any reference-grounded protocol. Use `asset-index-create` only for adding standalone local/remote assets after intake. Keep `reference-assets/asset-index.json` synchronized. Page content MUST reference stable asset ids, not raw paths.
+Run `ppt_composer_doctor` first for PDF/Office/scanned/image references. Then use `mineru-open-mcp.parse_documents` for documents that require extraction, then feed the saved Markdown and returned image assets (`image_paths`, including extracted figures or page-image/input-image fallback) into `reference-intake` / `pptx-reference-intake` before drafting or confirming any reference-grounded protocol. Use `asset-index-create` only for adding standalone local/remote assets after intake. Keep `reference-assets/asset-index.json` synchronized. Page content MUST reference stable asset ids, not raw paths.
 
 Protocol skeleton:
 
