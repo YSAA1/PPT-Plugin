@@ -113,6 +113,28 @@ codex plugin marketplace add .
 
 然后打开 `/plugins`，选择 **PPT Composer**，点击 **Install plugin**。安装后新开一个 Codex 线程。
 
+### 更新已安装插件
+
+`codex plugin marketplace add` 只是登记 marketplace 来源，不会热更新已经加载的 Codex 线程。GitHub marketplace 要先刷新来源：
+
+```bash
+codex plugin marketplace upgrade
+```
+
+然后重新打开 `/plugins`，需要时从刷新后的来源再次安装 **PPT Composer**。最后新开 Codex 线程或重启 Codex，让 skill 和 MCP server 从新的插件缓存加载。
+
+如果你是从本地 clone 安装，先 `git pull` 更新 clone，再运行 `codex plugin marketplace add .`，然后从 `/plugins` 重新安装。
+
+### 如果出现两个 PPT Composer
+
+Codex 会按 marketplace 来源展示插件。同一个插件如果同时被个人 marketplace 和 GitHub/repo marketplace 暴露，就会显示两份。保留一个来源，删除另一个：
+
+```bash
+codex plugin marketplace remove <marketplace-name>
+```
+
+然后重启 Codex。已安装插件会放在 `~/.codex/plugins/cache/<marketplace-name>/<plugin-name>/<version>/`，所以不同 marketplace 名称会产生不同缓存目录。
+
 ## 输出和质量边界
 
 - 最终 PPTX：每页一张全页 PNG，不再叠加 PowerPoint 文本框。
