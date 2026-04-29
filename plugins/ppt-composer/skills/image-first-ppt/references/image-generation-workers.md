@@ -20,10 +20,17 @@ Primary path: Codex built-in image generation via the installed `imagegen` skill
 - `generate-assets --provider codex` is only a prompt-sheet handoff, not image generation.
 - `generate-assets --provider openai` is an explicit API fallback.
 - If imagegen workers fail or return prompt-only output, retry or generate directly. MUST NOT assemble placeholders.
-- Treat protocol confirmation as authorization to use bounded image-generation subagents for the confirmed pages only when parallelism is worth the local startup cost.
+- Protocol confirmation is the explicit user authorization to use bounded image-generation subagents for the confirmed pages. Do not ask for separate subagent permission, and do not wait for the user to say "subagent", "worker", or "parallel".
 - In Codex App/plain Codex sessions, subagents may initialize the same plugin MCP servers as the leader. Do not spawn many image workers if that would multiply `ppt-render-mcp`, `mineru-open-mcp`, `uvx`, or Python startup.
-- For multi-page decks, prefer the leader or a small bounded worker batch when local MCP startup is expensive. Record the reason when choosing direct generation over subagents.
+- For 2-6 page decks, prefer the leader or a small bounded worker batch when local MCP startup is expensive. Record the reason when choosing direct generation over subagents.
+- For 7+ page decks, parallelism is worth the local startup cost by default; reduce worker count only for a concrete spawn/runtime blocker.
 - The leader MUST NOT silently ignore failed subagent spawning; if fallback is used, record whether it was due to runtime rejection, MCP startup cost, or imagegen failure.
+
+Worker dispatch decision gate:
+
+- Before generating any page, count the confirmed protocol pages.
+- If there are 7+ confirmed pages and no spawn attempt has been made, STOP before direct generation and attempt worker dispatch first.
+- 10 pages is not a leader-only deck; it is in the 7-12 page lane and MUST use the default worker split unless spawn is unavailable, blocked, or a concrete spawn attempt fails.
 
 Leader must split work as follows:
 

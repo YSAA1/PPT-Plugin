@@ -248,6 +248,7 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(protocolReference, /structured PPTX inventory\/reflow lane/i);
   assert.match(workerReference, /leader MUST create one shared deck generation context/i);
   assert.match(skillSource, /style_lock/i);
+  assert.match(skillSource, /7\+ confirmed pages.*do not require.*subagent/i);
   assert.match(workerReference, /Forked chat history is supplemental only/i);
   assert.match(workerReference, /A worker prompt that does not include the `style_lock` is invalid/i);
   assert.match(workerReference, /Every worker MUST receive the exact same `style_lock`/i);
@@ -255,6 +256,11 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(workerReference, /MUST NOT rely on inherited chat history as the only consistency mechanism/i);
   assert.match(workerReference, /MUST NOT call `spawn_agent` with `fork_context: true` when also setting `agent_type`/i);
   assert.match(workerReference, /Default shape is the lightweight context packet/i);
+  assert.match(workerReference, /Protocol confirmation is the explicit user authorization.*bounded image-generation subagents/i);
+  assert.match(workerReference, /Do not ask for separate subagent permission/i);
+  assert.match(workerReference, /Before generating any page, count the confirmed protocol pages/i);
+  assert.match(workerReference, /If there are 7\+ confirmed pages and no spawn attempt has been made, STOP/i);
+  assert.match(workerReference, /10 pages is not a leader-only deck/i);
   assert.match(workerReference, /set `reasoning_effort: "low"`/i);
   assert.match(workerReference, /If role-less forked spawn fails, or if a role\/reasoning override is required by the runtime, MUST omit `fork_context`/i);
   assert.match(workerReference, /Forking is optional only when the runtime benefits from extra history/i);

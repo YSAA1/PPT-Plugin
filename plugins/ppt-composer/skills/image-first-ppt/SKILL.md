@@ -40,7 +40,7 @@ Execute in this exact order. Do not skip forward.
 3. Validate `deck-protocol.json`.
 4. Patch revisions only through protocol patch tools. If patch tools are unavailable, record the reason, edit the protocol directly, and immediately rerun `validate-deck-protocol`.
 5. Present the protocol summary and wait for explicit protocol confirmation. This is the Protocol Confirmation Gate.
-6. After confirmation, generate final full-slide PNGs directly with Codex image generation. Read [references/image-generation-workers.md](references/image-generation-workers.md).
+6. After confirmation, count confirmed pages, then generate final full-slide PNGs with Codex image generation. For 7+ confirmed pages, automatic bounded subagent dispatch is REQUIRED. Read [references/image-generation-workers.md](references/image-generation-workers.md).
 7. Track page status in `imagegen-jobs.json`.
 8. Run deterministic `visual-qa` to check whether the generated PNG files are structurally assembleable. Read [references/manifest-visual-qa.md](references/manifest-visual-qa.md).
 9. Run the internal visual review loop only when the user explicitly asks for visual QA, strict review, consistency checking, or protocol-execution checking.
@@ -82,6 +82,7 @@ If no uploaded file or explicit reference path exists, MUST NOT scan the current
 - Codex built-in image generation is the primary image path; missing `OPENAI_API_KEY` is not evidence that built-in `image_gen` is unavailable.
 - `generate-assets --provider codex` is only a prompt-sheet handoff, not image generation.
 - `style_lock` in `imagegen-jobs.json` is the canonical visual consistency contract across workers.
+- 7+ confirmed pages do not require separate subagent wording from the user; protocol confirmation is enough authorization for bounded image workers.
 - Default subagent strategy is a lightweight context packet with `reasoning_effort: "low"`; forked context is optional and must not be combined with reasoning effort.
 - Visual review is explicit opt-in. Deterministic `visual-qa` still runs before assembly.
 
