@@ -5,10 +5,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 import { buildPluginEnv } from "./env-loader.mjs";
+import { isCommandLaunchError, resolveNpmCommand } from "./command-resolver.mjs";
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
-const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const env = buildPluginEnv({ pluginRoot });
+const npmCommand = resolveNpmCommand({ env, overrideEnv: "PPT_COMPOSER_NPM" });
 
 const requiredDeps = [
   "node_modules/@modelcontextprotocol/sdk",
@@ -55,8 +56,8 @@ function installMissingDeps(missingDeps) {
   ].join("\n"));
 
   const install = spawnSync(
-    npmCommand,
-    ["install", "--no-audit", "--no-fund", "--omit=dev"],
+    npmCommand.command,
+    [...npmCommand.args, "install", "--no-audit", "--no-fund", "--omit=dev"],
     {
       cwd: pluginRoot,
       stdio: ["ignore", "pipe", "pipe"],
@@ -68,8 +69,9 @@ function installMissingDeps(missingDeps) {
   if (install.stdout) process.stderr.write(install.stdout);
   if (install.stderr) process.stderr.write(install.stderr);
 
-  if (install.error?.code === "ENOENT") {
-    console.error("npm was not found. Install Node.js/npm, then restart Codex or run `npm run prewarm` manually.");
+  if (isCommandLaunchError(install.error)) {
+    console.error(`npm could not be launched (${npmCommand.command}): ${install.error.message}`);
+    console.error("Install Node.js/npm, set PPT_COMPOSER_NPM, then restart Codex or run `npm run prewarm` manually.");
     process.exit(1);
   }
 

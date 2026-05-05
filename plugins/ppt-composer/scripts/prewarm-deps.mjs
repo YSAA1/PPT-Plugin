@@ -4,10 +4,11 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { isCommandLaunchError, resolveCommand, resolveNpmCommand } from "./command-resolver.mjs";
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
-const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
-const uvxCommand = process.platform === "win32" ? "uvx.cmd" : "uvx";
+const npmCommand = resolveNpmCommand({ overrideEnv: "PPT_COMPOSER_NPM" });
+const uvxCommand = resolveCommand("uvx", { overrideEnv: "PPT_COMPOSER_UVX" });
 const args = new Set(process.argv.slice(2));
 
 const requiredNodeDeps = [
@@ -47,14 +48,19 @@ function prewarmNodeDeps() {
   console.log(`Missing: ${missing.join(", ")}`);
 
   const install = spawnSync(
-    npmCommand,
-    ["install", "--no-audit", "--no-fund", "--omit=dev"],
+    npmCommand.command,
+    [...npmCommand.args, "install", "--no-audit", "--no-fund", "--omit=dev"],
     {
       cwd: pluginRoot,
       stdio: "inherit",
       windowsHide: true
     }
   );
+
+  if (isCommandLaunchError(install.error)) {
+    console.error(`npm could not be launched (${npmCommand.command}): ${install.error.message}`);
+    process.exit(1);
+  }
 
   if (install.status !== 0) {
     process.exit(install.status ?? 1);
@@ -66,8 +72,13 @@ function prewarmNodeDeps() {
 function prewarmMineruDeps() {
   console.log("Prewarming mineru-open-mcp through uvx...");
 
+  if (!uvxCommand.resolved) {
+    console.error("uvx was not found. Install uv first, or skip prewarm:mineru if MinerU parsing is not needed.");
+    process.exit(1);
+  }
+
   const check = spawnSync(
-    uvxCommand,
+    uvxCommand.command,
     [
       "--from",
       "mineru-open-mcp",
@@ -89,8 +100,8 @@ function prewarmMineruDeps() {
     }
   );
 
-  if (check.error?.code === "ENOENT") {
-    console.error("uvx was not found. Install uv first, or skip prewarm:mineru if MinerU parsing is not needed.");
+  if (isCommandLaunchError(check.error)) {
+    console.error(`uvx could not be launched (${uvxCommand.command}): ${check.error.message}`);
     process.exit(1);
   }
 
