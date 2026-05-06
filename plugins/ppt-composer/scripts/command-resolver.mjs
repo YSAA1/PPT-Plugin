@@ -38,7 +38,7 @@ export function resolveCommand(command, { env = process.env, overrideEnv } = {})
   if (override) {
     return {
       command: override,
-      resolved: existsSync(override),
+      resolved: hasPathSeparator(override) ? existsSync(override) : true,
       source: overrideEnv,
     };
   }
