@@ -5,62 +5,70 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 import { buildPluginEnv } from "./env-loader.mjs";
+import { isCommandLaunchError, resolveCommand, resolveNpmCommand } from "./command-resolver.mjs";
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
-const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
-const uvxCommand = process.platform === "win32" ? "uvx.cmd" : "uvx";
 const env = buildPluginEnv({ pluginRoot });
+const npmCommand = resolveNpmCommand({ env, overrideEnv: "PPT_COMPOSER_NPM" });
+const uvxCommand = resolveCommand("uvx", { env, overrideEnv: "PPT_COMPOSER_UVX" });
 
 const fallbackDeps = [
   "node_modules/@modelcontextprotocol/sdk",
   "node_modules/zod"
 ];
 
-const child = spawn(
-  uvxCommand,
-  [
-    "--from",
-    "mineru-open-mcp",
-    "--with",
-    "socksio",
-    "python",
-    "./scripts/mineru-open-mcp-with-images.py",
-    "--transport",
-    "stdio",
-    "--output-dir",
-    "./dist/mineru-open-mcp"
-  ],
-  {
-    cwd: pluginRoot,
-    stdio: "inherit",
-    windowsHide: true,
-    env: {
-      ...env,
-      FASTMCP_CHECK_FOR_UPDATES: "off",
-      FASTMCP_SHOW_SERVER_BANNER: "false"
+if (!uvxCommand.resolved) {
+  void startSetupHelpMcp().catch((fallbackError) => {
+    console.error(`Failed to start mineru-open-mcp setup helper: ${fallbackError.message}`);
+    process.exit(1);
+  });
+} else {
+  const child = spawn(
+    uvxCommand.command,
+    [
+      "--from",
+      "mineru-open-mcp",
+      "--with",
+      "socksio",
+      "python",
+      "./scripts/mineru-open-mcp-with-images.py",
+      "--transport",
+      "stdio",
+      "--output-dir",
+      "./dist/mineru-open-mcp"
+    ],
+    {
+      cwd: pluginRoot,
+      stdio: "inherit",
+      windowsHide: true,
+      env: {
+        ...env,
+        FASTMCP_CHECK_FOR_UPDATES: "off",
+        FASTMCP_SHOW_SERVER_BANNER: "false"
+      }
     }
-  }
-);
+  );
 
-child.on("error", (error) => {
-  if (error.code === "ENOENT") {
-    void startSetupHelpMcp().catch((fallbackError) => {
-      console.error(`Failed to start mineru-open-mcp setup helper: ${fallbackError.message}`);
-      process.exit(1);
-    });
-    return;
-  }
+  child.on("error", (error) => {
+    if (isCommandLaunchError(error)) {
+      void startSetupHelpMcp().catch((fallbackError) => {
+        console.error(`Failed to start mineru-open-mcp setup helper: ${fallbackError.message}`);
+        process.exit(1);
+      });
+      return;
+    }
 
-  console.error(`Failed to start mineru-open-mcp: ${error.message}`);
-  process.exit(1);
-});
+    console.error(`Failed to start mineru-open-mcp: ${error.message}`);
+    process.exit(1);
+  });
 
-child.on("exit", (code, signal) => {
-  if (signal) {
-    process.kill(process.pid, signal);
-  }
-  process.exit(code ?? 0);
-});
+  child.on("exit", (code, signal) => {
+    if (signal) {
+      process.kill(process.pid, signal);
+    }
+    process.exit(code ?? 0);
+  });
+}
 
 async function startSetupHelpMcp() {
   console.error([
@@ -140,8 +148,8 @@ function ensureFallbackDeps() {
   ].join("\n"));
 
   const install = spawnSync(
-    npmCommand,
-    ["install", "--no-audit", "--no-fund", "--omit=dev"],
+    npmCommand.command,
+    [...npmCommand.args, "install", "--no-audit", "--no-fund", "--omit=dev"],
     {
       cwd: pluginRoot,
       stdio: ["ignore", "pipe", "pipe"],
@@ -153,8 +161,8 @@ function ensureFallbackDeps() {
   if (install.stdout) process.stderr.write(install.stdout);
   if (install.stderr) process.stderr.write(install.stderr);
 
-  if (install.error?.code === "ENOENT") {
-    throw new Error("npm was not found. Install Node.js/npm, then restart Codex or run `npm run prewarm` manually.");
+  if (isCommandLaunchError(install.error)) {
+    throw new Error(`npm could not be launched (${npmCommand.command}): ${install.error.message}`);
   }
 
   if (install.status !== 0) {

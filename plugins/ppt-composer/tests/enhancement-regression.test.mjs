@@ -279,7 +279,7 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(workerReference, /If role-less forked spawn fails, or if a role\/reasoning override is required by the runtime, MUST omit `fork_context`/i);
   assert.match(workerReference, /Forking is optional only when the runtime benefits from extra history/i);
   assert.match(workerReference, /Each default worker packet contains only: verbatim `style_lock`/i);
-  assert.match(workerReference, /fork_context: true,\n  reasoning_effort: "low"/i);
+  assert.match(workerReference, /fork_context: true,\r?\n  reasoning_effort: "low"/i);
   assert.match(workerReference, /Shared deck generation context:/i);
   assert.match(workerReference, /Do not edit prompts for other pages/i);
   assert.match(workerReference, /Save or return the real generated PNG artifact for each page/i);

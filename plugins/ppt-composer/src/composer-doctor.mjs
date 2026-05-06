@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { buildPluginEnv, envFileCandidates, parseEnvFile } from "../scripts/env-loader.mjs";
+import { resolveCommand, resolveNpmCommand } from "../scripts/command-resolver.mjs";
 import { readJson } from "./lib.mjs";
 
 const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -28,9 +29,12 @@ export async function runComposerDoctor({ createEnvTemplate = false, envPath } =
   }
 
   const nodeMajor = Number.parseInt(process.versions.node.split(".")[0], 10);
-  const uvx = commandCheck(process.platform === "win32" ? "uvx.cmd" : "uvx", ["--version"]);
-  const npm = commandCheck(process.platform === "win32" ? "npm.cmd" : "npm", ["--version"]);
-  const pdftoppm = commandCheck("pdftoppm", ["-v"]);
+  const uvxCommand = resolveCommand("uvx", { env, overrideEnv: "PPT_COMPOSER_UVX" });
+  const npmCommand = resolveNpmCommand({ env, overrideEnv: "PPT_COMPOSER_NPM" });
+  const pdftoppmCommand = resolveCommand("pdftoppm", { env });
+  const uvx = commandCheck(uvxCommand, ["--version"]);
+  const npm = commandCheck(npmCommand, ["--version"]);
+  const pdftoppm = commandCheck(pdftoppmCommand, ["-v"]);
   const mineruTokenPresent = Boolean(env.MINERU_API_TOKEN || env.MINERU_TOKEN);
   const mineruServer = mcpConfig?.mcpServers?.["mineru-open-mcp"] || {};
   const renderServer = mcpConfig?.mcpServers?.["ppt-render-mcp"] || {};
@@ -154,8 +158,12 @@ async function canAccess(filePath) {
   }
 }
 
-function commandCheck(command, args) {
-  const result = spawnSync(command, args, {
+function commandCheck(commandSpec, args) {
+  if (!commandSpec.resolved) {
+    return { ok: false, error: `${commandSpec.command} was not found` };
+  }
+
+  const result = spawnSync(commandSpec.command, [...(commandSpec.args || []), ...args], {
     encoding: "utf8",
     timeout: 10_000,
     windowsHide: true,
