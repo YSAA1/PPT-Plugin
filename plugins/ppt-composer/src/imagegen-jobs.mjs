@@ -1,13 +1,14 @@
 import path from "node:path";
 import { inspectPng } from "./png-utils.mjs";
 import { readJson, writeJson } from "./lib.mjs";
-import { speakerNotesFromPage } from "./deck-protocol.mjs";
+import { buildTemplateContract, speakerNotesFromPage } from "./deck-protocol.mjs";
 
 const DONE_STATES = new Set(["generated", "accepted"]);
 const BACKFILL_STATES = new Set(["generated", "accepted", "needs_review"]);
 const REVIEW_VERDICTS = new Set(["pass", "warn", "fail"]);
 const REVIEW_DIMENSIONS = [
   "consistency",
+  "template_invariants",
   "protocol_alignment",
   "reference_fidelity",
   "text_legibility",
@@ -242,6 +243,7 @@ export function reviewImagegenJob(jobs, {
   reviewer = "",
   revisionSuggestion = "",
   consistency = null,
+  templateInvariants = null,
   protocolAlignment = null,
   basicImageQuality = null,
   referenceFidelity = null,
@@ -258,6 +260,7 @@ export function reviewImagegenJob(jobs, {
   const categories = normalizeReviewCategories({
     verdict,
     consistency,
+    templateInvariants,
     protocolAlignment,
     referenceFidelity,
     textLegibility,
@@ -445,6 +448,7 @@ function supersedeCurrentAttemptIfNeeded(page, nextPath, note) {
 function normalizeReviewCategories({
   verdict,
   consistency,
+  templateInvariants,
   protocolAlignment,
   referenceFidelity,
   textLegibility,
@@ -452,6 +456,7 @@ function normalizeReviewCategories({
 }) {
   return {
     consistency: normalizeVerdict(consistency || verdict, "consistency"),
+    template_invariants: normalizeVerdict(templateInvariants || verdict, "template_invariants"),
     protocol_alignment: normalizeVerdict(protocolAlignment || verdict, "protocol_alignment"),
     reference_fidelity: normalizeVerdict(referenceFidelity || verdict, "reference_fidelity"),
     text_legibility: normalizeVerdict(textLegibility || verdict, "text_legibility"),
@@ -500,6 +505,7 @@ function normalizeUncertainties(value) {
 function buildStyleLock(protocol = {}) {
   const deck = protocol.deck || {};
   const style = protocol.style || {};
+  const templateContract = buildTemplateContract(style);
   const pages = (protocol.pages || []).map((page) => ({
     page: Number(page.page),
     title: page.title,
@@ -525,12 +531,17 @@ function buildStyleLock(protocol = {}) {
       font_scale: style.font_scale || style.font_size_tendency || "readable slide-scale titles and labels",
       chart_style: style.chart_style || "clean consulting/research charts with legible labels",
       margins: style.margins || style.whitespace || "consistent margins and controlled whitespace",
-      page_number_policy: style.page_number_policy || style.pageNumberPolicy || "consistent: either no page numbers, or the same small bottom-right page/total footer on every slide except a deliberate cover exemption",
+      page_number_policy: templateContract.page_number_policy,
+      footer_policy: templateContract.footer_policy,
+      logo_policy: templateContract.logo_policy,
+      template_element_policy: templateContract.template_element_policy,
       visible_text_policy: style.visible_text_policy || style.visibleTextPolicy || "visible slide text must not include asset ids, filenames, file paths, source labels, or protocol metadata",
       template_image_ids: style.template_image_ids || [],
-      logo_ids: style.logo_ids || [],
+      logo_ids: templateContract.logo_ids,
+      template_exemptions: templateContract.template_exemptions,
       forbidden: style.forbidden || [],
     },
+    template_contract: templateContract,
     page_list: pages,
     assets: (protocol.assets || []).map((asset) => ({
       id: asset.id,
@@ -544,7 +555,7 @@ function buildStyleLock(protocol = {}) {
       "All visible title, claim, labels, chart text, captions, and logos must be rendered inside the PNG.",
       "Do not create a blank background, prompt-only handoff, SVG, HTML screenshot, or later PowerPoint text overlay.",
       "Use the same visual system, typography, palette, density, margins, and hierarchy across all pages.",
-      "Use one consistent page number/footer policy across the deck; do not randomly add page numbers to only some pages.",
+      "Template invariants are hard requirements: use the same logo treatment, page-number policy, footer policy, and recurring template elements across all non-exempt slides.",
       "Do not invent or alter facts, numbers, curves, table headers, logos, or captions on strict_embed pages.",
     ],
     negative_contract: [

@@ -70,6 +70,7 @@ Collect these before drafting a protocol. Ask only for missing items. Do not inf
 - Required: target audience.
 - Required: page-count range or exact page count.
 - Required: visual style.
+- Required: template invariants: logo policy, page-number/footer policy, and any fixed recurring marks OR explicit "none".
 - Required: aspect ratio; use 16:9 only when the user says they do not care.
 - Required: output directory and final PPTX filename.
 - Required: reference file paths/uploaded files OR an explicit "no references, generate from brief only" confirmation.
@@ -87,11 +88,12 @@ If no uploaded file or explicit reference path exists, MUST NOT scan the current
 - Existing-PPT hard-preservation requests are a different product lane; read [references/protocol.md](references/protocol.md) before responding.
 - Codex built-in image generation is the primary image path; missing `OPENAI_API_KEY` is not evidence that built-in `image_gen` is unavailable.
 - `generate-assets --provider codex` is only a prompt-sheet handoff, not image generation.
-- `style_lock` in `imagegen-jobs.json` is the canonical visual consistency contract across workers.
+- `style_lock.template_contract` in `imagegen-jobs.json` is the canonical hard contract for logo, page-number, footer, and repeated template elements across workers.
 - `deck-protocol.review.md` is the human review version; chat summary alone is not enough for protocol confirmation.
 - `imagegen-jobs.json.worker_dispatch` is the canonical subagent dispatch plan for 7+ page decks.
 - Generated protocols add `speaker_notes` by default. Notes are presenter talk tracks customized to the audience, not one-sentence labels and not visible slide text.
-- A consistent page-number/footer policy and a visible-metadata ban are part of the visual contract. Do not let only some generated pages show page numbers, and never render asset ids, filenames, paths, `source:` labels, or parser/protocol metadata inside slide images.
+- Template invariants are hard requirements, not style suggestions. Do not let only some generated pages show page numbers, omit required logos, redraw logos differently, or change footer/template marks page by page.
+- Never render asset ids, filenames, paths, `source:` labels, or parser/protocol metadata inside slide images.
 - 7+ confirmed pages do not require separate subagent wording from the user; protocol confirmation is enough authorization for bounded image workers.
 - Default subagent strategy is a lightweight context packet. Default subagent reasoning is `low`; escalate to `medium` only for complex evidence/fidelity pages. Forked context is optional and must not be combined with reasoning effort.
 - Visual review is explicit opt-in. Deterministic `visual-qa` still runs before assembly.

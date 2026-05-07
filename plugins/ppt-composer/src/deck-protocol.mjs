@@ -25,11 +25,33 @@ export function createDeckProtocol({ mode = "brief_mode", deck = {}, style = {},
       palette: style.palette || [],
       typography: style.typography || "",
       page_number_policy: style.page_number_policy || style.pageNumberPolicy || "consistent: either no page numbers, or the same small bottom-right page/total footer on every slide except a deliberate cover exemption",
+      footer_policy: style.footer_policy || style.footerPolicy || "consistent: use the same footer treatment on every slide, or omit footers everywhere",
+      logo_policy: style.logo_policy || style.logoPolicy || logoPolicyFromIds(style.logo_ids || []),
+      template_element_policy: style.template_element_policy || style.templateElementPolicy || "template-controlled logos, page numbers, footers, section markers, and recurring decorations must be identical across pages except documented cover/section exemptions",
+      template_exemptions: style.template_exemptions || style.templateExemptions || [],
       visible_text_policy: style.visible_text_policy || style.visibleTextPolicy || "do not render asset ids, filenames, file paths, source labels, or protocol metadata as visible slide text",
     },
     assets,
     pages,
   };
+}
+
+export function buildTemplateContract(style = {}) {
+  const logoIds = style.logo_ids || style.logoIds || [];
+  return {
+    logo_policy: style.logo_policy || style.logoPolicy || logoPolicyFromIds(logoIds),
+    logo_ids: logoIds,
+    page_number_policy: style.page_number_policy || style.pageNumberPolicy || "consistent: either no page numbers, or the same small bottom-right page/total footer on every slide except a deliberate cover exemption",
+    footer_policy: style.footer_policy || style.footerPolicy || "consistent: use the same footer treatment on every slide, or omit footers everywhere",
+    template_element_policy: style.template_element_policy || style.templateElementPolicy || "template-controlled logos, page numbers, footers, section markers, and recurring decorations must be identical across pages except documented cover/section exemptions",
+    template_exemptions: style.template_exemptions || style.templateExemptions || [],
+  };
+}
+
+function logoPolicyFromIds(logoIds = []) {
+  return logoIds.length
+    ? "use the exact referenced logo asset(s) with the same placement, size, color treatment, and frequency across all non-exempt slides"
+    : "no deck logo unless the user explicitly provides or requests one; do not invent per-page logos";
 }
 
 export function validateDeckProtocol(protocol, { requireGeneratedPng = false, baseDir = process.cwd() } = {}) {

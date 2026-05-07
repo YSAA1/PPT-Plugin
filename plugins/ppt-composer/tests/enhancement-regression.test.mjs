@@ -230,6 +230,7 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(skillSource, /worker_dispatch\.assignments/i);
   assert.match(skillSource, /speaker_notes.*by default/i);
   assert.match(skillSource, /page-number\/footer policy/i);
+  assert.match(skillSource, /template invariants/i);
   assert.match(skillSource, /asset ids, filenames, paths, `source:` labels/i);
   assert.match(skillSource, /ask only for the missing fields and STOP/i);
   assert.match(skillSource, /Stop condition: any required item is unknown/i);
@@ -292,12 +293,14 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(protocolReference, /Generated protocols SHOULD include `speaker_notes` by default/i);
   assert.match(protocolReference, /audience-specific talk tracks/i);
   assert.match(protocolReference, /Visual consistency and metadata rules/i);
+  assert.match(protocolReference, /logo policy, page-number policy, footer policy/i);
   assert.match(protocolReference, /Do not allow page numbers to appear randomly/i);
   assert.match(protocolReference, /asset ids, filenames, file paths, `source:`/i);
   assert.match(protocolReference, /Speaker notes MUST NOT be rendered inside the PNG/i);
   assert.match(protocolReference, /protocol -> `imagegen-jobs\.json` -> `png-manifest\.json` -> PPT speaker notes/i);
   assert.match(workerReference, /Directly call Codex built-in image generation/i);
   assert.match(workerReference, /page-number\/footer policy/i);
+  assert.match(workerReference, /style_lock\.template_contract/i);
   assert.match(workerReference, /Do not render internal metadata/i);
   assert.match(workerReference, /missing `OPENAI_API_KEY` does not mean built-in `image_gen` is unavailable/i);
   assert.match(workerReference, /generate-assets --provider codex.*prompt-sheet handoff/i);
@@ -314,6 +317,7 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(toolsReference, /imagegen-jobs-create/i);
   assert.match(skillSource, /visual-qa/i);
   assert.match(qaReference, /Visual review prompt template/i);
+  assert.match(qaReference, /template_invariants/i);
   assert.match(qaReference, /consistency: Does this PNG match the confirmed deck visual system/i);
   assert.match(qaReference, /protocol_alignment: Does this PNG follow the page claim/i);
   assert.match(qaReference, /reference_fidelity: Are referenced figures/i);
@@ -699,6 +703,9 @@ test('reference-intake writes deck protocol from mixed local references', async 
   const review = await readFile(reviewPath, 'utf8');
   assert.match(review, /# Protocol Demo Review/);
   assert.match(review, /## Assets/);
+  assert.match(review, /## Template Invariants/);
+  assert.match(review, /Logo policy/);
+  assert.match(review, /Page-number policy/);
   assert.match(review, /source_image/);
   assert.match(review, /## Pages/);
   assert.match(review, /Status: OK/);
@@ -875,8 +882,15 @@ test('imagegen jobs gate manifest creation and visual QA blocks bad PNGs', async
   assert.match(jobsAfterCreate.style_lock.style.chart_style, /consulting\/research/);
   assert.match(jobsAfterCreate.style_lock.style.margins, /whitespace/);
   assert.match(jobsAfterCreate.style_lock.style.page_number_policy, /consistent/i);
+  assert.match(jobsAfterCreate.style_lock.style.footer_policy, /consistent/i);
+  assert.match(jobsAfterCreate.style_lock.style.logo_policy, /no deck logo/i);
+  assert.match(jobsAfterCreate.style_lock.style.template_element_policy, /template-controlled/i);
+  assert.match(jobsAfterCreate.style_lock.template_contract.logo_policy, /no deck logo/i);
+  assert.match(jobsAfterCreate.style_lock.template_contract.page_number_policy, /consistent/i);
+  assert.match(jobsAfterCreate.style_lock.template_contract.footer_policy, /consistent/i);
+  assert.match(jobsAfterCreate.style_lock.template_contract.template_element_policy, /template-controlled/i);
   assert.match(jobsAfterCreate.style_lock.style.visible_text_policy, /asset ids/i);
-  assert.match(jobsAfterCreate.style_lock.format_contract.join(' '), /page number\/footer policy/i);
+  assert.match(jobsAfterCreate.style_lock.format_contract.join(' '), /Template invariants are hard requirements/i);
   assert.match(jobsAfterCreate.style_lock.negative_contract.join(' '), /source labels/i);
   assert.equal(jobsAfterCreate.worker_dispatch.required, true);
   assert.equal(jobsAfterCreate.worker_dispatch.default_reasoning_effort, 'low');
@@ -887,6 +901,7 @@ test('imagegen jobs gate manifest creation and visual QA blocks bad PNGs', async
   );
   assert.deepEqual(jobsAfterCreate.visualReview.dimensions, [
     'consistency',
+    'template_invariants',
     'protocol_alignment',
     'reference_fidelity',
     'text_legibility',
@@ -952,6 +967,15 @@ test('imagegen jobs gate manifest creation and visual QA blocks bad PNGs', async
 
   const qaResult = await runCli(['visual-qa', '--protocol', protocolPath, '--jobs', jobsPath, '--out', qaPath]);
   assert.equal(qaResult.status, 'pass');
+
+  const missingContractJobsPath = path.join(outDir, 'missing-template-contract-jobs.json');
+  const missingContractJobs = JSON.parse(await readFile(jobsPath, 'utf8'));
+  delete missingContractJobs.style_lock.template_contract;
+  await writeFile(missingContractJobsPath, `${JSON.stringify(missingContractJobs, null, 2)}\n`);
+  await assert.rejects(
+    runCli(['visual-qa', '--protocol', protocolPath, '--jobs', missingContractJobsPath, '--out', path.join(outDir, 'missing-contract-qa.json')]),
+    /template_contract_missing/,
+  );
 
   const badJobsPath = path.join(outDir, 'bad-jobs.json');
   const tinyPath = path.join(outDir, 'tiny.png');
@@ -1049,6 +1073,7 @@ test('imagegen visual review gates accepted pages and preserves superseded attem
     'Consistent with the deck and aligned with the protocol.',
   ]);
   assert.equal(accepted.status, 'accepted');
+  assert.equal(accepted.review.categories.template_invariants, 'pass');
   assert.equal(accepted.review.categories.protocol_alignment, 'pass');
   assert.equal(accepted.review.categories.reference_fidelity, 'pass');
   assert.equal(accepted.review.categories.text_legibility, 'pass');
@@ -1090,6 +1115,7 @@ test('imagegen visual review gates accepted pages and preserves superseded attem
   assert.equal(visualFail.visualReview.enabled, true);
   assert.deepEqual(visualFail.visualReview.dimensions, [
     'consistency',
+    'template_invariants',
     'protocol_alignment',
     'reference_fidelity',
     'text_legibility',
@@ -1098,6 +1124,7 @@ test('imagegen visual review gates accepted pages and preserves superseded attem
   assert.equal(visualFail.visualReview.pages[1].verdict, 'fail');
   assert.match(visualFail.visualReview.pages[1].revisionSuggestion, /Tighten the prompt/);
   assert.equal(visualFail.visualReview.pages[1].categories.reference_fidelity, 'fail');
+  assert.equal(visualFail.visualReview.pages[1].categories.template_invariants, 'fail');
 
   const override = await runCli([
     'visual-qa',

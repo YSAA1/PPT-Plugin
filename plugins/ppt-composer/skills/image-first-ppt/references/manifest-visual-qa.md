@@ -71,6 +71,7 @@ Allowed page states include:
 Visual review dimensions:
 
 - `consistency`: matches the confirmed deck style, typography, palette, and visual rhythm.
+- `template_invariants`: follows the exact deck-wide logo, page-number, footer, and recurring template-element contract; no per-page omissions or variants unless explicitly exempted.
 - `protocol_alignment`: follows the page claim, content inputs, reference bindings, final image prompt, negative prompt, and fidelity mode.
 - `reference_fidelity`: preserves assigned source figures, tables, values, curves, headers, logos, and captions, especially for `strict_embed`.
 - `text_legibility`: keeps all rendered slide text readable at presentation scale.
@@ -103,6 +104,7 @@ Shared deck context:
 - Global style: <style.description>
 - Palette: <style.palette>
 - Typography: <style.typography>
+- Template invariant contract: <style_lock.template_contract>
 - Full page list: <page numbers, titles, claims>
 
 For each assigned page:
@@ -115,10 +117,11 @@ For each assigned page:
 
 Review dimensions:
 1. consistency: Does this PNG match the confirmed deck visual system, typography, palette, density, and cross-page rhythm?
-2. protocol_alignment: Does this PNG follow the page claim, required content, reference bindings, final_image_prompt, negative_prompt, and fidelity?
-3. reference_fidelity: Are referenced figures, tables, numbers, curves, headers, logos, and captions preserved?
-4. text_legibility: Is all visible slide text readable at presentation scale?
-5. artifact_quality: Are there obvious generated-image defects, broken layout, warped tables/logos, blank regions, watermarks, or background-only output?
+2. template_invariants: Does this PNG follow the exact logo, page-number, footer, and recurring template-element contract from `style_lock.template_contract`?
+3. protocol_alignment: Does this PNG follow the page claim, required content, reference bindings, final_image_prompt, negative_prompt, and fidelity?
+4. reference_fidelity: Are referenced figures, tables, numbers, curves, headers, logos, and captions preserved?
+5. text_legibility: Is all visible slide text readable at presentation scale?
+6. artifact_quality: Are there obvious generated-image defects, broken layout, warped tables/logos, blank regions, watermarks, or background-only output?
 
 Return one compact JSON object:
 {
@@ -127,6 +130,7 @@ Return one compact JSON object:
       "page": 1,
       "verdict": "pass|warn|fail",
       "consistency": "pass|warn|fail",
+      "template_invariants": "pass|warn|fail",
       "protocol_alignment": "pass|warn|fail",
       "reference_fidelity": "pass|warn|fail",
       "text_legibility": "pass|warn|fail",
