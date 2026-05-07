@@ -63,8 +63,8 @@ Shared context rules:
 - `imagegen-jobs.json` MUST contain a `style_lock` object. Treat that object as the canonical shared visual contract for all image-generation and visual-review workers.
 - `imagegen-jobs.json` MUST contain `worker_dispatch`. For 7+ pages, `worker_dispatch.required` MUST be true and `worker_dispatch.assignments` MUST be non-empty before any direct generation fallback.
 - `style_lock` MUST include stable visual fields for layout density, font/size tendency, palette, chart style, margins/whitespace, and forbidden items.
-- `style_lock.template_contract` MUST include logo policy, page-number policy, footer policy, recurring template-element policy, and any explicit exemptions. Workers must treat these as hard invariants on every assigned page.
-- The page-number/footer policy is part of the template invariant contract, not an optional per-page decoration.
+- `style_lock.template_contract` MUST include logo policy, logo color policy, page-number policy, footer policy, recurring template-element policy, and any explicit exemptions. Workers must treat these as hard invariants on every assigned page.
+- The page-number/footer policy is part of the template invariant contract, not an optional per-page decoration. Default is no visible page numbers unless the confirmed initial request explicitly asked for them.
 - `style_lock` MUST include one visible-text policy. Workers must follow the same footer/logo/page-number policy on every assigned page.
 - Every worker MUST receive the exact same `style_lock` plus only its assigned page protocol slice and relevant reference asset paths.
 - MUST NOT rely on inherited chat history as the only consistency mechanism.
@@ -147,8 +147,8 @@ Scope:
 - Treat `speaker_notes` as presenter-only notes; do not render them as visible slide text.
 - Use low reasoning by default, or medium only when the assignment explicitly states the page meets the escalation rule; focus on direct image generation, not deck planning.
 - Do not render internal metadata such as asset ids, filenames, file paths, `source:`, `source table`, `reference asset`, or protocol field names.
-- Keep page numbers/footers consistent with the shared `style_lock`; do not add or omit page numbers ad hoc.
-- Keep logos and recurring template marks identical to `style_lock.template_contract`; do not invent, omit, restyle, recolor, resize, or move logos page by page.
+- Do not add visible page numbers unless `style_lock.template_contract.page_number_policy` explicitly requires them; if required, keep style, position, format, size, and color identical across all non-exempt pages.
+- Keep logos and recurring template marks identical to `style_lock.template_contract`; do not invent, omit, restyle, recolor, tint, gradient-shift, resize, redraw, or move logos page by page.
 
 Shared deck generation context:
 - Style lock:

@@ -131,7 +131,7 @@ function templateContractFindings(jobs = {}) {
   if (!contract || typeof contract !== "object") {
     return [fail(null, "template_contract_missing", "imagegen-jobs.json style_lock.template_contract is required for logo, page-number, footer, and recurring template consistency")];
   }
-  const required = ["logo_policy", "page_number_policy", "footer_policy", "template_element_policy"];
+  const required = ["logo_policy", "logo_color_policy", "page_number_policy", "footer_policy", "template_element_policy"];
   return required
     .filter((key) => !String(contract[key] || "").trim())
     .map((key) => fail(null, "template_contract_missing", `style_lock.template_contract.${key} is required`));

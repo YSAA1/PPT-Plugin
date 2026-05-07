@@ -229,7 +229,7 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(skillSource, /deck-protocol\.review\.md/i);
   assert.match(skillSource, /worker_dispatch\.assignments/i);
   assert.match(skillSource, /speaker_notes.*by default/i);
-  assert.match(skillSource, /page-number\/footer policy/i);
+  assert.match(skillSource, /page numbers default to none/i);
   assert.match(skillSource, /template invariants/i);
   assert.match(skillSource, /asset ids, filenames, paths, `source:` labels/i);
   assert.match(skillSource, /ask only for the missing fields and STOP/i);
@@ -294,7 +294,9 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(protocolReference, /audience-specific talk tracks/i);
   assert.match(protocolReference, /Visual consistency and metadata rules/i);
   assert.match(protocolReference, /logo policy, page-number policy, footer policy/i);
-  assert.match(protocolReference, /Do not allow page numbers to appear randomly/i);
+  assert.match(protocolReference, /Do not allow page numbers or footers to appear randomly/i);
+  assert.match(protocolReference, /Default page-number policy is no visible page numbers/i);
+  assert.match(protocolReference, /position, format, size, and color/i);
   assert.match(protocolReference, /asset ids, filenames, file paths, `source:`/i);
   assert.match(protocolReference, /Speaker notes MUST NOT be rendered inside the PNG/i);
   assert.match(protocolReference, /protocol -> `imagegen-jobs\.json` -> `png-manifest\.json` -> PPT speaker notes/i);
@@ -705,6 +707,7 @@ test('reference-intake writes deck protocol from mixed local references', async 
   assert.match(review, /## Assets/);
   assert.match(review, /## Template Invariants/);
   assert.match(review, /Logo policy/);
+  assert.match(review, /Logo color policy/);
   assert.match(review, /Page-number policy/);
   assert.match(review, /source_image/);
   assert.match(review, /## Pages/);
@@ -881,16 +884,19 @@ test('imagegen jobs gate manifest creation and visual QA blocks bad PNGs', async
   assert.match(jobsAfterCreate.style_lock.style.font_scale, /readable/);
   assert.match(jobsAfterCreate.style_lock.style.chart_style, /consulting\/research/);
   assert.match(jobsAfterCreate.style_lock.style.margins, /whitespace/);
-  assert.match(jobsAfterCreate.style_lock.style.page_number_policy, /consistent/i);
+  assert.match(jobsAfterCreate.style_lock.style.page_number_policy, /no visible page numbers/i);
   assert.match(jobsAfterCreate.style_lock.style.footer_policy, /consistent/i);
   assert.match(jobsAfterCreate.style_lock.style.logo_policy, /no deck logo/i);
+  assert.match(jobsAfterCreate.style_lock.style.logo_color_policy, /do not recolor/i);
   assert.match(jobsAfterCreate.style_lock.style.template_element_policy, /template-controlled/i);
   assert.match(jobsAfterCreate.style_lock.template_contract.logo_policy, /no deck logo/i);
-  assert.match(jobsAfterCreate.style_lock.template_contract.page_number_policy, /consistent/i);
+  assert.match(jobsAfterCreate.style_lock.template_contract.logo_color_policy, /preserve original logo colors/i);
+  assert.match(jobsAfterCreate.style_lock.template_contract.page_number_policy, /no visible page numbers/i);
   assert.match(jobsAfterCreate.style_lock.template_contract.footer_policy, /consistent/i);
   assert.match(jobsAfterCreate.style_lock.template_contract.template_element_policy, /template-controlled/i);
   assert.match(jobsAfterCreate.style_lock.style.visible_text_policy, /asset ids/i);
   assert.match(jobsAfterCreate.style_lock.format_contract.join(' '), /Template invariants are hard requirements/i);
+  assert.match(jobsAfterCreate.style_lock.format_contract.join(' '), /Do not add visible page numbers unless/i);
   assert.match(jobsAfterCreate.style_lock.negative_contract.join(' '), /source labels/i);
   assert.equal(jobsAfterCreate.worker_dispatch.required, true);
   assert.equal(jobsAfterCreate.worker_dispatch.default_reasoning_effort, 'low');
@@ -1247,6 +1253,7 @@ test('deck protocol validates references and drives visual-plan prompt slices', 
     assets: [
       { id: 'txt-1', type: 'text_evidence', source: 'brief', text: 'Main result improves sample efficiency.', summary: 'Main result improves sample efficiency.' },
       { id: 'tbl-1', type: 'source_table', path: path.join(outDir, 'table.png'), source: 'brief', summary: 'table with key metric' },
+      { id: 'logo-1', type: 'logo', path: path.join(outDir, 'logo.png'), source: 'brand', caption: 'Lab logo' },
     ],
     pages: [
       {
@@ -1273,7 +1280,9 @@ test('deck protocol validates references and drives visual-plan prompt slices', 
       },
     ],
   };
+  protocol.style.logo_ids = ['logo-1'];
   await writeTinyPng(path.join(outDir, 'table.png'));
+  await writeTinyPng(path.join(outDir, 'logo.png'));
   await writeFile(protocolPath, `${JSON.stringify(protocol, null, 2)}\n`);
 
   const visualResult = await runCli([
@@ -1291,7 +1300,11 @@ test('deck protocol validates references and drives visual-plan prompt slices', 
   assert.ok(visualPlan.requests.every((request) => request.protocolPage));
   assert.ok(visualPlan.requests.some((request) => request.fidelity === 'strict_embed'));
   assert.ok(visualPlan.requests.every((request) => /Fidelity mode:/i.test(request.prompt)));
+  assert.ok(visualPlan.requests.every((request) => /Logo policy:/i.test(request.prompt)));
+  assert.ok(visualPlan.requests.every((request) => /Logo color policy:.*do not recolor/i.test(request.prompt)));
   assert.ok(visualPlan.requests.every((request) => /Page numbering policy:/i.test(request.prompt)));
+  assert.ok(visualPlan.requests.every((request) => /Page numbering policy: no visible page numbers/i.test(request.prompt)));
+  assert.ok(visualPlan.requests.every((request) => !request.referenceAssets.some((asset) => asset.id === 'logo-1')));
   assert.ok(visualPlan.requests.every((request) => /Do not render internal evidence labels/i.test(request.prompt)));
   assert.ok(visualPlan.requests.every((request) => !/tbl-1:/i.test(request.prompt)));
   assert.ok(visualPlan.requests.every((request) => !/Grounding evidence:.*source table/i.test(request.prompt)));
@@ -1319,6 +1332,16 @@ test('deck protocol validates references and drives visual-plan prompt slices', 
   await assert.rejects(
     runCli(['validate-deck-protocol', '--protocol', badProtocolPath]),
     /unknown asset id/,
+  );
+
+  const badLogoProtocolPath = path.join(outDir, 'bad-logo-protocol.json');
+  await writeFile(badLogoProtocolPath, `${JSON.stringify({
+    ...protocol,
+    style: { ...protocol.style, logo_ids: ['missing-logo'] },
+  }, null, 2)}\n`);
+  await assert.rejects(
+    runCli(['validate-deck-protocol', '--protocol', badLogoProtocolPath]),
+    /style\.logo_ids includes unknown image\/logo id/,
   );
 });
 

@@ -71,7 +71,7 @@ Allowed page states include:
 Visual review dimensions:
 
 - `consistency`: matches the confirmed deck style, typography, palette, and visual rhythm.
-- `template_invariants`: follows the exact deck-wide logo, page-number, footer, and recurring template-element contract; no per-page omissions or variants unless explicitly exempted.
+- `template_invariants`: follows the exact deck-wide logo, logo color, page-number, footer, and recurring template-element contract; no per-page omissions, recoloring, tinting, or variants unless explicitly exempted.
 - `protocol_alignment`: follows the page claim, content inputs, reference bindings, final image prompt, negative prompt, and fidelity mode.
 - `reference_fidelity`: preserves assigned source figures, tables, values, curves, headers, logos, and captions, especially for `strict_embed`.
 - `text_legibility`: keeps all rendered slide text readable at presentation scale.
@@ -117,7 +117,7 @@ For each assigned page:
 
 Review dimensions:
 1. consistency: Does this PNG match the confirmed deck visual system, typography, palette, density, and cross-page rhythm?
-2. template_invariants: Does this PNG follow the exact logo, page-number, footer, and recurring template-element contract from `style_lock.template_contract`?
+2. template_invariants: Does this PNG follow the exact logo, logo color, page-number, footer, and recurring template-element contract from `style_lock.template_contract`?
 3. protocol_alignment: Does this PNG follow the page claim, required content, reference bindings, final_image_prompt, negative_prompt, and fidelity?
 4. reference_fidelity: Are referenced figures, tables, numbers, curves, headers, logos, and captions preserved?
 5. text_legibility: Is all visible slide text readable at presentation scale?

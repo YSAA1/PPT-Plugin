@@ -274,7 +274,7 @@ function buildProtocolPages({ assets, pageCount, deck, protocolMode }) {
         `Create page ${pageNumber} as a complete finished full-slide 16:9 PPT image.`,
         `Main claim: ${claim}`,
         "Use a polished scientific-consulting layout with sparse readable labels.",
-        "Keep footer/page-number treatment consistent with the rest of the deck.",
+        "Do not add visible page numbers unless the confirmed protocol style explicitly requires them; if required, keep one identical page-number style across the deck.",
         "Do not render internal asset ids, file names, paths, source labels, or protocol metadata as visible slide text.",
       ].join(" "),
       negative_prompt: "No separate PPT text overlay, no fake numbers, no fake logos, no watermark, no tiny unreadable text, no placeholder art, no visible asset ids, no file names, no file paths, no source labels, no protocol metadata.",

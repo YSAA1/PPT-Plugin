@@ -4,6 +4,7 @@ import { isFile, slugify } from "./lib.mjs";
 
 const FIDELITY_VALUES = new Set(["free", "light_redraw", "strict_embed"]);
 const SPEAKER_NOTE_KEYS = ["speaker_notes", "speakerNotes", "notes", "remarks", "presenter_notes", "备注"];
+const DEFAULT_PAGE_NUMBER_POLICY = "no visible page numbers by default; add page numbers only when the confirmed initial user requirement explicitly requests them; if enabled, use one identical style, position, format, size, and color on every non-exempt slide";
 
 export function createDeckProtocol({ mode = "brief_mode", deck = {}, style = {}, assets = [], pages = [], source = null } = {}) {
   return {
@@ -24,9 +25,10 @@ export function createDeckProtocol({ mode = "brief_mode", deck = {}, style = {},
       logo_ids: style.logo_ids || [],
       palette: style.palette || [],
       typography: style.typography || "",
-      page_number_policy: style.page_number_policy || style.pageNumberPolicy || "consistent: either no page numbers, or the same small bottom-right page/total footer on every slide except a deliberate cover exemption",
+      page_number_policy: style.page_number_policy || style.pageNumberPolicy || DEFAULT_PAGE_NUMBER_POLICY,
       footer_policy: style.footer_policy || style.footerPolicy || "consistent: use the same footer treatment on every slide, or omit footers everywhere",
       logo_policy: style.logo_policy || style.logoPolicy || logoPolicyFromIds(style.logo_ids || []),
+      logo_color_policy: style.logo_color_policy || style.logoColorPolicy || "do not recolor, tint, gradient-shift, restyle, or redraw referenced logos; preserve original logo colors exactly",
       template_element_policy: style.template_element_policy || style.templateElementPolicy || "template-controlled logos, page numbers, footers, section markers, and recurring decorations must be identical across pages except documented cover/section exemptions",
       template_exemptions: style.template_exemptions || style.templateExemptions || [],
       visible_text_policy: style.visible_text_policy || style.visibleTextPolicy || "do not render asset ids, filenames, file paths, source labels, or protocol metadata as visible slide text",
@@ -40,8 +42,9 @@ export function buildTemplateContract(style = {}) {
   const logoIds = style.logo_ids || style.logoIds || [];
   return {
     logo_policy: style.logo_policy || style.logoPolicy || logoPolicyFromIds(logoIds),
+    logo_color_policy: style.logo_color_policy || style.logoColorPolicy || "do not recolor, tint, gradient-shift, restyle, or redraw referenced logos; preserve original logo colors exactly",
     logo_ids: logoIds,
-    page_number_policy: style.page_number_policy || style.pageNumberPolicy || "consistent: either no page numbers, or the same small bottom-right page/total footer on every slide except a deliberate cover exemption",
+    page_number_policy: style.page_number_policy || style.pageNumberPolicy || DEFAULT_PAGE_NUMBER_POLICY,
     footer_policy: style.footer_policy || style.footerPolicy || "consistent: use the same footer treatment on every slide, or omit footers everywhere",
     template_element_policy: style.template_element_policy || style.templateElementPolicy || "template-controlled logos, page numbers, footers, section markers, and recurring decorations must be identical across pages except documented cover/section exemptions",
     template_exemptions: style.template_exemptions || style.templateExemptions || [],
@@ -50,7 +53,7 @@ export function buildTemplateContract(style = {}) {
 
 function logoPolicyFromIds(logoIds = []) {
   return logoIds.length
-    ? "use the exact referenced logo asset(s) with the same placement, size, color treatment, and frequency across all non-exempt slides"
+    ? "use the exact referenced logo asset(s) with the same placement, size, original colors, and frequency across all non-exempt slides"
     : "no deck logo unless the user explicitly provides or requests one; do not invent per-page logos";
 }
 
@@ -80,6 +83,9 @@ export function validateDeckProtocol(protocol, { requireGeneratedPng = false, ba
     .filter((asset) => /image|logo/.test(asset.type || ""))
     .map((asset) => asset.id)
     .filter(Boolean));
+  for (const id of protocol?.style?.logo_ids || []) {
+    if (!imageIds.has(id)) errors.push(`style.logo_ids includes unknown image/logo id: ${id}`);
+  }
 
   const pages = protocol?.pages;
   if (!Array.isArray(pages) || pages.length === 0) {
@@ -281,7 +287,9 @@ function visualPageFromProtocolPage(protocolPage, protocol, assetsById, index) {
     .filter((asset) => /image|logo/.test(asset.type || ""))
     .map((asset) => asset.caption || asset.summary || "visual evidence");
   const evidence = [...textEvidence, ...tableEvidence, ...imageEvidence].filter(Boolean).slice(0, 8);
-  const pageNumberPolicy = protocol.style?.page_number_policy || protocol.style?.pageNumberPolicy || "Use one consistent footer/page-number policy across all pages.";
+  const pageNumberPolicy = protocol.style?.page_number_policy || protocol.style?.pageNumberPolicy || DEFAULT_PAGE_NUMBER_POLICY;
+  const logoPolicy = protocol.style?.logo_policy || protocol.style?.logoPolicy || logoPolicyFromIds(protocol.style?.logo_ids || []);
+  const logoColorPolicy = protocol.style?.logo_color_policy || protocol.style?.logoColorPolicy || "Do not recolor referenced logos.";
   const visibleTextPolicy = protocol.style?.visible_text_policy || protocol.style?.visibleTextPolicy || "Never render asset ids, filenames, source labels, or protocol metadata as visible slide text.";
   const prompt = [
     "Use case: productivity-visual",
@@ -293,6 +301,8 @@ function visualPageFromProtocolPage(protocolPage, protocol, assetsById, index) {
     `Fidelity mode: ${protocolPage.fidelity}.`,
     protocol.style?.description ? `Style lock: ${protocol.style.description}` : null,
     evidence.length ? `Grounding evidence: ${evidence.join("; ")}.` : "Grounding evidence: no external evidence; use only the approved brief.",
+    `Logo policy: ${logoPolicy}`,
+    `Logo color policy: ${logoColorPolicy}`,
     `Page numbering policy: ${pageNumberPolicy}`,
     `Visible text policy: ${visibleTextPolicy}`,
     "Text policy: no later PPT text overlay; all required visible text must be rendered inside this PNG.",
@@ -323,6 +333,7 @@ function visualPageFromProtocolPage(protocolPage, protocol, assetsById, index) {
       "page follows deck-protocol.json",
       "one clear main claim",
       "referenced evidence is respected",
+      "referenced logos keep exact original colors and proportions",
       "no invented numeric results",
       "no tiny unreadable text",
       "no watermarks or UI chrome",

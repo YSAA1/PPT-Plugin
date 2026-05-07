@@ -534,6 +534,7 @@ function buildStyleLock(protocol = {}) {
       page_number_policy: templateContract.page_number_policy,
       footer_policy: templateContract.footer_policy,
       logo_policy: templateContract.logo_policy,
+      logo_color_policy: templateContract.logo_color_policy,
       template_element_policy: templateContract.template_element_policy,
       visible_text_policy: style.visible_text_policy || style.visibleTextPolicy || "visible slide text must not include asset ids, filenames, file paths, source labels, or protocol metadata",
       template_image_ids: style.template_image_ids || [],
@@ -556,6 +557,8 @@ function buildStyleLock(protocol = {}) {
       "Do not create a blank background, prompt-only handoff, SVG, HTML screenshot, or later PowerPoint text overlay.",
       "Use the same visual system, typography, palette, density, margins, and hierarchy across all pages.",
       "Template invariants are hard requirements: use the same logo treatment, page-number policy, footer policy, and recurring template elements across all non-exempt slides.",
+      "Do not add visible page numbers unless style_lock.template_contract.page_number_policy explicitly requires them; if page numbers are required, keep style, position, format, size, and color identical on every non-exempt slide.",
+      "Referenced logos must preserve original colors exactly; no recoloring, tinting, gradient shifts, restyling, or redrawing.",
       "Do not invent or alter facts, numbers, curves, table headers, logos, or captions on strict_embed pages.",
     ],
     negative_contract: [

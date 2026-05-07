@@ -86,11 +86,13 @@ Speaker notes rules:
 
 Visual consistency and metadata rules:
 
-- The protocol/style MUST define template invariants for the whole deck: logo policy, page-number policy, footer policy, recurring template marks, and any cover/section exemptions.
-- Logo treatment is a hard invariant. If `style.logo_ids` is non-empty, every non-exempt page must use the same referenced logo asset(s), placement, size, and color treatment. If no logo is requested/provided, do not invent logos on individual pages.
+- The protocol/style MUST define template invariants for the whole deck: logo policy, logo color policy, page-number policy, footer policy, recurring template marks, and any cover/section exemptions.
+- At minimum, the template invariant contract includes logo policy, page-number policy, footer policy, and logo color policy.
+- Logo treatment is a hard invariant. If `style.logo_ids` is non-empty, every non-exempt page must use the same referenced logo asset(s), placement, size, and original colors. If no logo is requested/provided, do not invent logos on individual pages.
+- Logo recoloring is forbidden. Do not tint, gradient-shift, restyle, redraw, or adapt logo colors to a slide palette; preserve the original referenced logo colors exactly.
 - Page-number and footer treatment are hard invariants. Do not allow page numbers or footers to appear randomly on only some pages.
-- Do not allow page numbers to appear randomly; choose one deck-wide page-number policy and enforce it on every non-exempt page.
-- Unless the user explicitly requests visible page numbers, either omit page numbers everywhere or use the same small bottom-right page/total footer consistently.
+- Default page-number policy is no visible page numbers. Add page numbers only when the initial user requirement explicitly requests visible page numbers.
+- If page numbers are explicitly requested, choose one deck-wide page-number style and enforce identical position, format, size, and color on every non-exempt page.
 - `deck-protocol.review.md` MUST show the template invariant contract before asking for confirmation.
 - `final_image_prompt` and `negative_prompt` MUST forbid visible internal metadata: asset ids, filenames, file paths, `source:`, `source table`, `reference asset`, protocol field names, or parser labels.
 - Evidence ids and paths are for grounding only; they MUST NOT be copied into visible slide text.

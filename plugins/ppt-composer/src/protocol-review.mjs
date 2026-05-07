@@ -48,6 +48,7 @@ export function createProtocolReview(protocol, { protocolPath = null } = {}) {
     "## Template Invariants",
     "",
     `- Logo policy: ${templateContract.logo_policy}`,
+    `- Logo color policy: ${templateContract.logo_color_policy}`,
     `- Logo assets: ${templateContract.logo_ids.length ? templateContract.logo_ids.join(", ") : "none"}`,
     `- Page-number policy: ${templateContract.page_number_policy}`,
     `- Footer policy: ${templateContract.footer_policy}`,

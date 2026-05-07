@@ -70,7 +70,7 @@ Collect these before drafting a protocol. Ask only for missing items. Do not inf
 - Required: target audience.
 - Required: page-count range or exact page count.
 - Required: visual style.
-- Required: template invariants: logo policy, page-number/footer policy, and any fixed recurring marks OR explicit "none".
+- Required: template invariants: logo policy, logo color policy, footer policy, and any fixed recurring marks OR explicit "none"; page numbers default to none unless the initial request explicitly asks for them.
 - Required: aspect ratio; use 16:9 only when the user says they do not care.
 - Required: output directory and final PPTX filename.
 - Required: reference file paths/uploaded files OR an explicit "no references, generate from brief only" confirmation.
@@ -92,7 +92,7 @@ If no uploaded file or explicit reference path exists, MUST NOT scan the current
 - `deck-protocol.review.md` is the human review version; chat summary alone is not enough for protocol confirmation.
 - `imagegen-jobs.json.worker_dispatch` is the canonical subagent dispatch plan for 7+ page decks.
 - Generated protocols add `speaker_notes` by default. Notes are presenter talk tracks customized to the audience, not one-sentence labels and not visible slide text.
-- Template invariants are hard requirements, not style suggestions. Do not let only some generated pages show page numbers, omit required logos, redraw logos differently, or change footer/template marks page by page.
+- Template invariants are hard requirements, not style suggestions. Default to no page numbers; if explicitly requested, keep page-number style/position/format/size/color identical on every non-exempt slide. Do not let only some pages show page numbers, omit required logos, redraw logos differently, recolor/tint logos, or change footer/template marks page by page.
 - Never render asset ids, filenames, paths, `source:` labels, or parser/protocol metadata inside slide images.
 - 7+ confirmed pages do not require separate subagent wording from the user; protocol confirmation is enough authorization for bounded image workers.
 - Default subagent strategy is a lightweight context packet. Default subagent reasoning is `low`; escalate to `medium` only for complex evidence/fidelity pages. Forked context is optional and must not be combined with reasoning effort.
