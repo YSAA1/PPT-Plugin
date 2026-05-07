@@ -193,6 +193,7 @@ export function visualPlanFromDeckProtocol(protocol, { outputPath = null, defaul
   const model = defaults.model || "gpt-image-2";
   const sourceSpecDir = outputPath ? path.dirname(outputPath) : process.cwd();
   const assetsById = new Map((protocol.assets || []).map((asset) => [asset.id, asset]));
+  const templateAssets = templateAssetsFromStyle(protocol.style, assetsById);
   const pages = [];
   const requests = [];
 
@@ -210,7 +211,7 @@ export function visualPlanFromDeckProtocol(protocol, { outputPath = null, defaul
       usage: "full-slide",
       prompt: page.prompt,
       negativePrompt: page.negativePrompt,
-      codexPrompt: `$imagegen ${page.prompt}`,
+      codexPrompt: `$imagegen ${promptWithTemplateAssets(page.prompt, templateAssets)}`,
       output: protocolPage.output_png,
       speakerNotes: page.speakerNotes,
       size,
@@ -218,13 +219,15 @@ export function visualPlanFromDeckProtocol(protocol, { outputPath = null, defaul
       provider,
       background: "opaque",
       fidelity: protocolPage.fidelity,
-      protocolPage: protocolPageSlice(protocolPage, page.referenceAssets),
+      protocolPage: protocolPageSlice(protocolPage, page.referenceAssets, templateAssets),
       referenceAssets: page.referenceAssets,
+      templateAssets,
       placement: { x: 0, y: 0, w: 13.333, h: 7.5, mode: "full-slide" },
       editabilityImpact: "low-editability full-slide raster",
       notes: [
         "Use the protocol page slice as the source of truth.",
         "If reference assets include images or table PNGs, inspect/use them before image generation.",
+        "If template assets include logos, inspect them as global brand references; do not create placeholder boxes or render asset ids/paths as slide text.",
         "Strict fidelity forbids fabricated numbers, curves, labels, logos, or captions.",
       ],
     });
@@ -263,6 +266,35 @@ export function visualPlanFromDeckProtocol(protocol, { outputPath = null, defaul
     requests,
     assetRequests: requests,
   };
+}
+
+function templateAssetsFromStyle(style = {}, assetsById = new Map()) {
+  const ids = [
+    ...(style.logo_ids || style.logoIds || []),
+    ...(style.template_image_ids || style.templateImageIds || []),
+  ].filter((id, index, values) => id && values.indexOf(id) === index);
+  return ids
+    .map((id) => assetsById.get(id))
+    .filter(Boolean)
+    .map((asset) => ({
+      id: asset.id,
+      type: asset.type,
+      path: asset.path || null,
+      caption: asset.caption || asset.summary || "",
+      usage: asset.usage || "global template invariant",
+    }));
+}
+
+function promptWithTemplateAssets(prompt, templateAssets = []) {
+  if (!templateAssets.length) return prompt;
+  const assets = templateAssets
+    .map((asset) => `${asset.id} (${asset.type}) ${asset.path || asset.caption || ""}`.trim())
+    .join("; ");
+  return [
+    prompt,
+    `Global template assets to inspect before generation: ${assets}.`,
+    "Use global template assets only for deck-wide logo/template identity; do not create placeholder boxes, do not render asset ids or file paths as visible slide text, and do not treat these assets as ad hoc per-page content blocks.",
+  ].join("\n");
 }
 
 function visualPageFromProtocolPage(protocolPage, protocol, assetsById, index) {
@@ -341,7 +373,7 @@ function visualPageFromProtocolPage(protocolPage, protocol, assetsById, index) {
   };
 }
 
-function protocolPageSlice(page, referenceAssets) {
+function protocolPageSlice(page, referenceAssets, templateAssets = []) {
   return {
     page: page.page,
     title: page.title,
@@ -360,6 +392,7 @@ function protocolPageSlice(page, referenceAssets) {
       caption: asset.caption || asset.summary || "",
       usage: asset.usage || "",
     })),
+    template_assets: templateAssets,
   };
 }
 

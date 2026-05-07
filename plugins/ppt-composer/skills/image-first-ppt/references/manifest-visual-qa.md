@@ -50,9 +50,10 @@ Visual review state is stored in `imagegen-jobs.json`, not in the protocol. The 
 
 Visual QA activation:
 
-- Default: do not enable manual visual review. Deterministic `visual-qa` still checks PNG existence, format, dimensions, placeholder markers, and `strict_embed` reference binding.
-- Enable visual review only when the user asks for visual QA, strict review, consistency checking, or protocol-execution checking.
-- Once visual review is enabled, set `visualReview.enabled=true`; generated pages MUST NOT go directly to manifest.
+- Default: deterministic `visual-qa` always checks PNG existence, format, dimensions, placeholder markers, and `strict_embed` reference binding.
+- `imagegen-jobs-create` automatically sets `visualReview.enabled=true` when the deck has logo/template assets, visible page-number requirements, `strict_embed`, reference-grounded inputs, visual/document reference assets, or 7+ pages.
+- Low-risk small brief-only decks may keep `visualReview.enabled=false`; users can still explicitly ask for strict visual QA.
+- Once visual review is enabled, generated pages MUST NOT go directly to manifest.
 - When visual review is enabled, `png-manifest.json` MUST wait until every page status is `accepted`.
 - Without visual review, `png-manifest.json` may use `generated` or `accepted` jobs after deterministic QA passes.
 - Manual override may only bypass overrideable review findings. It MUST NOT bypass missing PNG, non-PNG, placeholder PNG, tiny PNG, missing `strict_embed` references, or `strict_embed` `reference_fidelity=fail`.

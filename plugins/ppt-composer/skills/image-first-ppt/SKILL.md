@@ -44,7 +44,7 @@ Execute in this exact order. Do not skip forward.
 7. After confirmation, create `imagegen-jobs.json`, count confirmed pages, and use `jobs.worker_dispatch.assignments` as the worker plan. For 7+ confirmed pages, automatic bounded subagent dispatch is REQUIRED before direct generation fallback. Read [references/image-generation-workers.md](references/image-generation-workers.md).
 8. Track page status in `imagegen-jobs.json`.
 9. Run deterministic `visual-qa` to check whether the generated PNG files are structurally assembleable. Read [references/manifest-visual-qa.md](references/manifest-visual-qa.md).
-10. Run the internal visual review loop only when the user explicitly asks for visual QA, strict review, consistency checking, or protocol-execution checking.
+10. Run the internal visual review loop whenever `imagegen-jobs.json.visualReview.enabled=true`; this is automatic for logo/template/page-number/reference/strict_embed/7+ page risk, and optional only for low-risk small brief-only decks.
 11. Create `png-manifest.json` only from complete accepted/generated jobs. If visual review is enabled, every page MUST be `accepted`.
 12. Assemble with `assemble-image-ppt` / MCP `assemble_image_ppt`.
 13. Run final `qa_pptx`.
@@ -96,7 +96,7 @@ If no uploaded file or explicit reference path exists, MUST NOT scan the current
 - Never render asset ids, filenames, paths, `source:` labels, or parser/protocol metadata inside slide images.
 - 7+ confirmed pages do not require separate subagent wording from the user; protocol confirmation is enough authorization for bounded image workers.
 - Default subagent strategy is a lightweight context packet. Default subagent reasoning is `low`; escalate to `medium` only for complex evidence/fidelity pages. Forked context is optional and must not be combined with reasoning effort.
-- Visual review is explicit opt-in. Deterministic `visual-qa` still runs before assembly.
+- Visual review is automatic for logo/template/page-number/reference/strict_embed/7+ page risk. Deterministic `visual-qa` still runs before assembly for every deck.
 
 ## Internal Tools
 

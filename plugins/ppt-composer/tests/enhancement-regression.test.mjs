@@ -326,7 +326,7 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(qaReference, /text_legibility: Is all visible slide text readable/i);
   assert.match(qaReference, /artifact_quality: Are there obvious generated-image defects/i);
   assert.match(qaReference, /The leader owns deterministic QA, manifest gating/i);
-  assert.match(qaReference, /Once visual review is enabled, set `visualReview\.enabled=true`/i);
+  assert.match(qaReference, /automatically sets `visualReview\.enabled=true`/i);
   assert.match(qaReference, /Manual override may only bypass overrideable review findings/i);
   assert.match(toolsReference, /Manual override MUST NOT bypass missing PNG, non-PNG, placeholder PNG, tiny PNG/i);
   assert.match(toolsReference, /pptx_reference_intake/i);
@@ -875,6 +875,7 @@ test('imagegen jobs gate manifest creation and visual QA blocks bad PNGs', async
   const createResult = await runCli(['imagegen-jobs-create', '--protocol', protocolPath, '--out', jobsPath]);
   assert.equal(createResult.summary.total, 20);
   assert.equal(createResult.summary.pending, 20);
+  assert.equal(createResult.summary.visualReviewEnabled, true);
   const jobsAfterCreate = JSON.parse(await readFile(jobsPath, 'utf8'));
   assert.equal(jobsAfterCreate.style_lock.id, 'deck-style-lock-v1');
   assert.equal(jobsAfterCreate.style_lock.deck.title, 'Jobs Demo');
@@ -913,7 +914,9 @@ test('imagegen jobs gate manifest creation and visual QA blocks bad PNGs', async
     'text_legibility',
     'artifact_quality',
   ]);
-  assert.equal(jobsAfterCreate.visualReview.enabled, false);
+  assert.equal(jobsAfterCreate.visualReview.enabled, true);
+  assert.equal(jobsAfterCreate.visualReview.autoEnabled, true);
+  assert.ok(jobsAfterCreate.visualReview.reasons.some((reason) => /7\+ pages/i.test(reason)));
   assert.equal(jobsAfterCreate.pages[0].worker_context.style_lock_id, 'deck-style-lock-v1');
   assert.equal(jobsAfterCreate.pages[0].worker_context.default_spawn, 'context_packet_low_reasoning');
   assert.equal(jobsAfterCreate.pages[0].speaker_notes, 'Presenter note for page one.');
@@ -954,11 +957,42 @@ test('imagegen jobs gate manifest creation and visual QA blocks bad PNGs', async
     await runCli(['imagegen-jobs-backfill', '--jobs', jobsPath, '--page', String(page), '--png', png]);
   }
 
+  await assert.rejects(
+    runCli(['imagegen-jobs-to-manifest', '--jobs', jobsPath, '--out', manifestPath]),
+    /accepted/,
+  );
+
+  for (let page = 1; page <= 20; page += 1) {
+    await runCli([
+      'imagegen-jobs-review',
+      '--jobs',
+      jobsPath,
+      '--page',
+      String(page),
+      '--verdict',
+      'pass',
+      '--consistency',
+      'pass',
+      '--template-invariants',
+      'pass',
+      '--protocol-alignment',
+      'pass',
+      '--reference-fidelity',
+      'pass',
+      '--text-legibility',
+      'pass',
+      '--artifact-quality',
+      'pass',
+      '--note',
+      'Auto visual review accepted in regression fixture.',
+    ]);
+  }
+
   const manifestResult = await runCli(['imagegen-jobs-to-manifest', '--jobs', jobsPath, '--out', manifestPath]);
   assert.equal(manifestResult.items, 20);
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
   assert.equal(manifest.items.length, 20);
-  assert.ok(manifest.items.every((item) => item.status === 'generated' && item.path.endsWith('.png')));
+  assert.ok(manifest.items.every((item) => item.status === 'generated' && item.sourceStatus === 'accepted' && item.path.endsWith('.png')));
   assert.equal(manifest.items[0].speaker_notes, 'Presenter note for page one.');
   assert.equal(manifest.items[1].speaker_notes, 'Alias note line one.\nAlias note line two.');
   assert.equal(manifest.items[2].speaker_notes, '中文备注会写入 PPT notes。');
@@ -1305,6 +1339,10 @@ test('deck protocol validates references and drives visual-plan prompt slices', 
   assert.ok(visualPlan.requests.every((request) => /Page numbering policy:/i.test(request.prompt)));
   assert.ok(visualPlan.requests.every((request) => /Page numbering policy: no visible page numbers/i.test(request.prompt)));
   assert.ok(visualPlan.requests.every((request) => !request.referenceAssets.some((asset) => asset.id === 'logo-1')));
+  assert.ok(visualPlan.requests.every((request) => request.templateAssets.some((asset) => asset.id === 'logo-1')));
+  assert.ok(visualPlan.requests.every((request) => request.protocolPage.template_assets.some((asset) => asset.id === 'logo-1')));
+  assert.ok(visualPlan.requests.every((request) => /Global template assets to inspect before generation:.*logo-1/i.test(request.codexPrompt)));
+  assert.ok(visualPlan.requests.every((request) => /do not create placeholder boxes/i.test(request.codexPrompt)));
   assert.ok(visualPlan.requests.every((request) => /Do not render internal evidence labels/i.test(request.prompt)));
   assert.ok(visualPlan.requests.every((request) => !/tbl-1:/i.test(request.prompt)));
   assert.ok(visualPlan.requests.every((request) => !/Grounding evidence:.*source table/i.test(request.prompt)));
@@ -1319,9 +1357,11 @@ test('deck protocol validates references and drives visual-plan prompt slices', 
   const manifest = JSON.parse(await readFile(manifestResult.manifest, 'utf8'));
   assert.equal(manifest.summary.manualRequired, 2);
   assert.ok(manifest.items.every((item) => item.protocolPage));
+  assert.ok(manifest.items.every((item) => item.templateAssets?.some((asset) => asset.id === 'logo-1')));
   assert.ok(manifest.items.some((item) => item.fidelity === 'strict_embed'));
   const promptSheet = await readFile(manifest.promptSheet, 'utf8');
   assert.match(promptSheet, /Protocol page slice/);
+  assert.match(promptSheet, /Global template assets to inspect before generation/);
   assert.match(promptSheet, /strict_embed/);
 
   const badProtocolPath = path.join(outDir, 'bad-protocol.json');

@@ -20,6 +20,7 @@ export function createImagegenJobs(protocol, { protocolPath = null, outPath = nu
   const pages = protocol.pages || [];
   const styleLock = buildStyleLock(protocol);
   const workerDispatch = buildWorkerDispatch(pages);
+  const visualReviewPlan = buildVisualReviewPlan(protocol, { pages, styleLock, workerDispatch });
   return {
     kind: "ppt-composer-imagegen-jobs",
     version: "0.1",
@@ -28,7 +29,9 @@ export function createImagegenJobs(protocol, { protocolPath = null, outPath = nu
     style_lock: styleLock,
     worker_dispatch: workerDispatch,
     visualReview: {
-      enabled: false,
+      enabled: visualReviewPlan.enabled,
+      autoEnabled: visualReviewPlan.enabled,
+      reasons: visualReviewPlan.reasons,
       dimensions: REVIEW_DIMENSIONS,
       maxAutoRevisions: 2,
     },
@@ -66,6 +69,29 @@ export function createImagegenJobs(protocol, { protocolPath = null, outPath = nu
       },
     })),
     outPath,
+  };
+}
+
+function buildVisualReviewPlan(protocol = {}, { pages = [], styleLock = {}, workerDispatch = {} } = {}) {
+  const reasons = [];
+  const style = protocol.style || {};
+  const assets = protocol.assets || [];
+  const templateContract = styleLock.template_contract || {};
+  const pageNumberPolicy = String(templateContract.page_number_policy || style.page_number_policy || style.pageNumberPolicy || "").toLowerCase();
+  if (workerDispatch.required || pages.length >= 7) reasons.push("7+ pages need cross-page consistency review");
+  if ((style.logo_ids || []).length) reasons.push("deck logo/template mark requires visual consistency review");
+  if ((style.template_image_ids || []).length) reasons.push("template image requires visual consistency review");
+  if (pageNumberPolicy && !/no visible page numbers|no page numbers|omit page numbers|without page numbers/.test(pageNumberPolicy)) {
+    reasons.push("visible page numbers require style/position/format consistency review");
+  }
+  if (pages.some((page) => page.fidelity === "strict_embed")) reasons.push("strict_embed pages require reference fidelity review");
+  if (protocol.mode === "reference_grounded_mode") reasons.push("reference-grounded deck requires protocol/reference alignment review");
+  if (assets.some((asset) => /logo|template|source_image|source_table|pptx|pdf|image/.test(`${asset.type || ""} ${asset.source || ""}`.toLowerCase()))) {
+    reasons.push("visual or document reference assets require fidelity review");
+  }
+  return {
+    enabled: reasons.length > 0,
+    reasons: [...new Set(reasons)],
   };
 }
 
