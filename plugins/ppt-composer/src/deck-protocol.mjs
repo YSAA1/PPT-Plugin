@@ -292,6 +292,7 @@ function promptWithTemplateAssets(prompt, templateAssets = []) {
     .join("; ");
   return [
     prompt,
+    "Generate the final full-slide PNG with Codex built-in image generation; do not switch to SVG, HTML, canvas, Python/PPT rendering, screenshots, or local compositing.",
     `Global template assets to inspect before generation: ${assets}.`,
     "Use global template assets only for deck-wide logo/template identity; do not create placeholder boxes, do not render asset ids or file paths as visible slide text, and do not treat these assets as ad hoc per-page content blocks.",
   ].join("\n");

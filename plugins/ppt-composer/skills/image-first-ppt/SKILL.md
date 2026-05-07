@@ -88,6 +88,7 @@ If no uploaded file or explicit reference path exists, MUST NOT scan the current
 - Existing-PPT hard-preservation requests are a different product lane; read [references/protocol.md](references/protocol.md) before responding.
 - Codex built-in image generation is the primary image path; missing `OPENAI_API_KEY` is not evidence that built-in `image_gen` is unavailable.
 - `generate-assets --provider codex` is only a prompt-sheet handoff, not image generation.
+- Logo, page-number, and template rules are constraints for Codex built-in image generation; they do not authorize SVG, HTML, canvas, Python/PPT rendering, screenshots, or local compositing as a substitute.
 - `style_lock.template_contract` in `imagegen-jobs.json` is the canonical hard contract for logo, page-number, footer, and repeated template elements across workers.
 - `deck-protocol.review.md` is the human review version; chat summary alone is not enough for protocol confirmation.
 - `imagegen-jobs.json.worker_dispatch` is the canonical subagent dispatch plan for 7+ page decks.

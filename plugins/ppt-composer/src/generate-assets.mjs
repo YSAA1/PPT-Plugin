@@ -97,7 +97,9 @@ async function writePlaceholder(request, outDir) {
 async function writeCodexPrompt(request, outDir) {
   const promptPath = path.join(outDir, `${slugify(request.assetId)}.prompt.md`);
   const body = [
-    `# Manual image generation for ${request.assetId}`,
+    `# Codex $imagegen generation for ${request.assetId}`,
+    "",
+    "Use Codex built-in image generation for the final PNG. Do not satisfy this request with SVG, HTML, canvas, Python/PPT rendering, screenshots, or local compositing.",
     "",
     request.protocolPage ? "Protocol page slice:" : null,
     request.protocolPage ? "```json" : null,
@@ -129,7 +131,7 @@ async function writeCodexPrompt(request, outDir) {
     readyForImageDeck: false,
     blocking: true,
     completionStatus: "requires_image_generation",
-    nextAction: "Run this $imagegen prompt, save the PNG, then set status=generated and path in asset-manifest.json.",
+    nextAction: "Run this with Codex $imagegen, save the generated PNG, then set status=generated and path in asset-manifest.json.",
     promptPath,
     expectedOutput: path.join(outDir, request.output || `${request.assetId}.png`),
     prompt: request.prompt,
@@ -150,7 +152,9 @@ async function writeCodexPromptSheet(requests, outDir) {
     "",
     "This is a blocking intermediate artifact, not a completed image-first deck.",
     "",
-    "Use each prompt with `$imagegen`, save the generated PNG at the expected output path, then update `asset-manifest.json` item status from `manual_required` to `generated` and set `path`.",
+    "Use each prompt with Codex `$imagegen`, save the generated PNG at the expected output path, then update `asset-manifest.json` item status from `manual_required` to `generated` and set `path`.",
+    "",
+    "Do not replace `$imagegen` with SVG, HTML, canvas, Python/PPT rendering, screenshots, or local compositing.",
     "",
     "Do not run `generate-image-deck` or report completion until every requested slide has a generated bitmap path.",
   ];

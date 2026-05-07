@@ -301,6 +301,8 @@ test('plugin exposes only the image-first-ppt skill', async () => {
   assert.match(protocolReference, /Speaker notes MUST NOT be rendered inside the PNG/i);
   assert.match(protocolReference, /protocol -> `imagegen-jobs\.json` -> `png-manifest\.json` -> PPT speaker notes/i);
   assert.match(workerReference, /Directly call Codex built-in image generation/i);
+  assert.match(workerReference, /not permission to switch to SVG, HTML, canvas, Python\/PPT rendering/i);
+  assert.match(skillSource, /constraints for Codex built-in image generation/i);
   assert.match(workerReference, /page-number\/footer policy/i);
   assert.match(workerReference, /style_lock\.template_contract/i);
   assert.match(workerReference, /Do not render internal metadata/i);
@@ -1342,6 +1344,7 @@ test('deck protocol validates references and drives visual-plan prompt slices', 
   assert.ok(visualPlan.requests.every((request) => request.templateAssets.some((asset) => asset.id === 'logo-1')));
   assert.ok(visualPlan.requests.every((request) => request.protocolPage.template_assets.some((asset) => asset.id === 'logo-1')));
   assert.ok(visualPlan.requests.every((request) => /Global template assets to inspect before generation:.*logo-1/i.test(request.codexPrompt)));
+  assert.ok(visualPlan.requests.every((request) => /Generate the final full-slide PNG with Codex built-in image generation/i.test(request.codexPrompt)));
   assert.ok(visualPlan.requests.every((request) => /do not create placeholder boxes/i.test(request.codexPrompt)));
   assert.ok(visualPlan.requests.every((request) => /Do not render internal evidence labels/i.test(request.prompt)));
   assert.ok(visualPlan.requests.every((request) => !/tbl-1:/i.test(request.prompt)));
@@ -1362,6 +1365,7 @@ test('deck protocol validates references and drives visual-plan prompt slices', 
   const promptSheet = await readFile(manifest.promptSheet, 'utf8');
   assert.match(promptSheet, /Protocol page slice/);
   assert.match(promptSheet, /Global template assets to inspect before generation/);
+  assert.match(promptSheet, /Do not replace `\$imagegen` with SVG, HTML, canvas, Python\/PPT rendering/i);
   assert.match(promptSheet, /strict_embed/);
 
   const badProtocolPath = path.join(outDir, 'bad-protocol.json');
@@ -1492,6 +1496,7 @@ test('visual-plan defaults to Codex imagegen prompts instead of SVG placeholders
   const promptSheet = await readFile(manifest.promptSheet, 'utf8');
   assert.match(promptSheet, /blocking intermediate artifact/);
   assert.match(promptSheet, /manual_required` to `generated` and set `path`/);
+  assert.match(promptSheet, /Do not replace `\$imagegen` with SVG, HTML, canvas, Python\/PPT rendering/i);
 
   const shouldNotRenderPath = path.join(outDir, 'should-not-render.spec.json');
   await assert.rejects(

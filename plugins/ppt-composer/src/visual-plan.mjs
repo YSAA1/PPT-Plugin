@@ -85,7 +85,7 @@ export async function imageDeckSpecFromVisualPlan(visualPlan, { assetManifest = 
     if (!isPngPath(manifestItem.path)) {
       throw new Error(
         `Image-first slide ${page.slideId || index + 1} must use a generated PNG path for final output. ` +
-        "Use PNG assets from $imagegen or an equivalent image generator; SVG, HTML, prompt sheets, and non-PNG paths are not accepted.",
+        "Use PNG assets from Codex $imagegen unless the user explicitly approved an API image-generation fallback; SVG, HTML, prompt sheets, screenshots, local renderers, and non-PNG paths are not accepted.",
       );
     }
     if (manifestItem?.path) {

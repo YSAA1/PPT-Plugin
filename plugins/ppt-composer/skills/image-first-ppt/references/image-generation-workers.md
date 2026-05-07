@@ -14,6 +14,7 @@
 
 Primary path: Codex built-in image generation via the installed `imagegen` skill, `$imagegen`, or `image_gen`.
 
+- Treat logo, page-number, and template rules as prompt constraints for Codex built-in image generation. They are not permission to switch to SVG, HTML, canvas, Python/PPT rendering, screenshots, or local compositing.
 - MUST NOT check `OPENAI_API_KEY` before trying Codex built-in image generation.
 - Missing `OPENAI_API_KEY` MUST NOT be treated as evidence that built-in `image_gen` is unavailable.
 - A missing `OPENAI_API_KEY` does not mean built-in `image_gen` is unavailable.
@@ -143,6 +144,7 @@ Scope:
 - Do not change the outline.
 - Do not edit prompts for other pages.
 - Do not create PPTX, SVG, HTML, markdown, placeholder art, or prompt-only artifacts.
+- Do not satisfy template/logo/page-number constraints by switching away from Codex built-in image generation.
 - Follow the shared deck generation context exactly so pages are visually consistent with other workers.
 - Treat `speaker_notes` as presenter-only notes; do not render them as visible slide text.
 - Use low reasoning by default, or medium only when the assignment explicitly states the page meets the escalation rule; focus on direct image generation, not deck planning.
@@ -185,7 +187,7 @@ For each assigned page:
 
 Required behavior:
 1. Inspect/use assigned reference images and table PNGs when present.
-2. Directly call Codex built-in image generation via the installed `imagegen` skill, `$imagegen`, or `image_gen` for each assigned page.
+2. Directly call Codex built-in image generation via the installed `imagegen` skill, `$imagegen`, or `image_gen` for each assigned page; do not use local rendering/compositing as a substitute.
 3. Save or return the real generated PNG artifact for each page.
 4. Stay within the assigned page budget; if generation is still running, keep working until the wait budget is reached.
 5. Return only:
