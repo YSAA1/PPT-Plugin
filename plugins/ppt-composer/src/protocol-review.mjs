@@ -66,7 +66,7 @@ export function createProtocolReview(protocol, { protocolPath = null } = {}) {
     "## Confirmation checklist",
     "",
     "- Check page count, language, audience, aspect ratio, and visual style.",
-    "- Check logo, page-number, footer, and recurring template-element policy; these are deck-wide invariants, not per-page suggestions.",
+    "- Check page-number, footer, and recurring template-element policy as deck-wide invariants; treat logo consistency as soft guidance only.",
     "- Check every required logo, image, table, number, citation, and exclusion appears as an asset or explicit page instruction.",
     "- Check reference-grounded pages bind assets through `content_inputs` or `reference_asset_ids`.",
     "- Confirm only when this review artifact matches the intended deck.",

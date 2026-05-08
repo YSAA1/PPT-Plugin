@@ -28,8 +28,8 @@ export function createDeckProtocol({ mode = "brief_mode", deck = {}, style = {},
       page_number_policy: style.page_number_policy || style.pageNumberPolicy || DEFAULT_PAGE_NUMBER_POLICY,
       footer_policy: style.footer_policy || style.footerPolicy || "consistent: use the same footer treatment on every slide, or omit footers everywhere",
       logo_policy: style.logo_policy || style.logoPolicy || logoPolicyFromIds(style.logo_ids || []),
-      logo_color_policy: style.logo_color_policy || style.logoColorPolicy || "do not recolor, tint, gradient-shift, restyle, or redraw referenced logos; preserve original logo colors exactly",
-      template_element_policy: style.template_element_policy || style.templateElementPolicy || "template-controlled logos, page numbers, footers, section markers, and recurring decorations must be identical across pages except documented cover/section exemptions",
+      logo_color_policy: style.logo_color_policy || style.logoColorPolicy || "soft consistency: if a logo is used, aim for similar colors, size, and placement across pages; do not post-process, paste, or repair logos after generation",
+      template_element_policy: style.template_element_policy || style.templateElementPolicy || "template-controlled page numbers, footers, section markers, and recurring decorations must be consistent across pages except documented cover/section exemptions; logos are soft consistency guidance only",
       template_exemptions: style.template_exemptions || style.templateExemptions || [],
       visible_text_policy: style.visible_text_policy || style.visibleTextPolicy || "do not render asset ids, filenames, file paths, source labels, or protocol metadata as visible slide text",
     },
@@ -42,18 +42,18 @@ export function buildTemplateContract(style = {}) {
   const logoIds = style.logo_ids || style.logoIds || [];
   return {
     logo_policy: style.logo_policy || style.logoPolicy || logoPolicyFromIds(logoIds),
-    logo_color_policy: style.logo_color_policy || style.logoColorPolicy || "do not recolor, tint, gradient-shift, restyle, or redraw referenced logos; preserve original logo colors exactly",
+    logo_color_policy: style.logo_color_policy || style.logoColorPolicy || "soft consistency: if a logo is used, aim for similar colors, size, and placement across pages; do not post-process, paste, or repair logos after generation",
     logo_ids: logoIds,
     page_number_policy: style.page_number_policy || style.pageNumberPolicy || DEFAULT_PAGE_NUMBER_POLICY,
     footer_policy: style.footer_policy || style.footerPolicy || "consistent: use the same footer treatment on every slide, or omit footers everywhere",
-    template_element_policy: style.template_element_policy || style.templateElementPolicy || "template-controlled logos, page numbers, footers, section markers, and recurring decorations must be identical across pages except documented cover/section exemptions",
+    template_element_policy: style.template_element_policy || style.templateElementPolicy || "template-controlled page numbers, footers, section markers, and recurring decorations must be consistent across pages except documented cover/section exemptions; logos are soft consistency guidance only",
     template_exemptions: style.template_exemptions || style.templateExemptions || [],
   };
 }
 
 function logoPolicyFromIds(logoIds = []) {
   return logoIds.length
-    ? "use the exact referenced logo asset(s) with the same placement, size, original colors, and frequency across all non-exempt slides"
+    ? "use the referenced logo only as a soft visual guide; aim for consistent color, approximate size, and placement across pages, but do not paste or repair logos as separate post-processing"
     : "no deck logo unless the user explicitly provides or requests one; do not invent per-page logos";
 }
 
@@ -193,7 +193,6 @@ export function visualPlanFromDeckProtocol(protocol, { outputPath = null, defaul
   const model = defaults.model || "gpt-image-2";
   const sourceSpecDir = outputPath ? path.dirname(outputPath) : process.cwd();
   const assetsById = new Map((protocol.assets || []).map((asset) => [asset.id, asset]));
-  const templateAssets = templateAssetsFromStyle(protocol.style, assetsById);
   const pages = [];
   const requests = [];
 
@@ -211,7 +210,7 @@ export function visualPlanFromDeckProtocol(protocol, { outputPath = null, defaul
       usage: "full-slide",
       prompt: page.prompt,
       negativePrompt: page.negativePrompt,
-      codexPrompt: `$imagegen ${promptWithTemplateAssets(page.prompt, templateAssets)}`,
+      codexPrompt: `$imagegen ${page.prompt}`,
       output: protocolPage.output_png,
       speakerNotes: page.speakerNotes,
       size,
@@ -219,16 +218,14 @@ export function visualPlanFromDeckProtocol(protocol, { outputPath = null, defaul
       provider,
       background: "opaque",
       fidelity: protocolPage.fidelity,
-      protocolPage: protocolPageSlice(protocolPage, page.referenceAssets, templateAssets),
+      protocolPage: protocolPageSlice(protocolPage, page.referenceAssets),
       referenceAssets: page.referenceAssets,
-      templateAssets,
       placement: { x: 0, y: 0, w: 13.333, h: 7.5, mode: "full-slide" },
       editabilityImpact: "low-editability full-slide raster",
       notes: [
         "Use the protocol page slice as the source of truth.",
         "If reference assets include images or table PNGs, inspect/use them before image generation.",
-        "If template assets include logos, inspect them as global brand references; do not create placeholder boxes or render asset ids/paths as slide text.",
-        "Strict fidelity forbids fabricated numbers, curves, labels, logos, or captions.",
+        "Strict fidelity forbids fabricated numbers, curves, labels, or captions.",
       ],
     });
   }
@@ -268,36 +265,6 @@ export function visualPlanFromDeckProtocol(protocol, { outputPath = null, defaul
   };
 }
 
-function templateAssetsFromStyle(style = {}, assetsById = new Map()) {
-  const ids = [
-    ...(style.logo_ids || style.logoIds || []),
-    ...(style.template_image_ids || style.templateImageIds || []),
-  ].filter((id, index, values) => id && values.indexOf(id) === index);
-  return ids
-    .map((id) => assetsById.get(id))
-    .filter(Boolean)
-    .map((asset) => ({
-      id: asset.id,
-      type: asset.type,
-      path: asset.path || null,
-      caption: asset.caption || asset.summary || "",
-      usage: asset.usage || "global template invariant",
-    }));
-}
-
-function promptWithTemplateAssets(prompt, templateAssets = []) {
-  if (!templateAssets.length) return prompt;
-  const assets = templateAssets
-    .map((asset) => `${asset.id} (${asset.type}) ${asset.path || asset.caption || ""}`.trim())
-    .join("; ");
-  return [
-    prompt,
-    "Generate the final full-slide PNG with Codex built-in image generation; do not switch to SVG, HTML, canvas, Python/PPT rendering, screenshots, or local compositing.",
-    `Global template assets to inspect before generation: ${assets}.`,
-    "Use global template assets only for deck-wide logo/template identity; do not create placeholder boxes, do not render asset ids or file paths as visible slide text, and do not treat these assets as ad hoc per-page content blocks.",
-  ].join("\n");
-}
-
 function visualPageFromProtocolPage(protocolPage, protocol, assetsById, index) {
   const slideId = `p${String(protocolPage.page || index + 1).padStart(2, "0")}`;
   const referenceAssets = [
@@ -322,7 +289,7 @@ function visualPageFromProtocolPage(protocolPage, protocol, assetsById, index) {
   const evidence = [...textEvidence, ...tableEvidence, ...imageEvidence].filter(Boolean).slice(0, 8);
   const pageNumberPolicy = protocol.style?.page_number_policy || protocol.style?.pageNumberPolicy || DEFAULT_PAGE_NUMBER_POLICY;
   const logoPolicy = protocol.style?.logo_policy || protocol.style?.logoPolicy || logoPolicyFromIds(protocol.style?.logo_ids || []);
-  const logoColorPolicy = protocol.style?.logo_color_policy || protocol.style?.logoColorPolicy || "Do not recolor referenced logos.";
+  const logoColorPolicy = protocol.style?.logo_color_policy || protocol.style?.logoColorPolicy || "If a logo is used, aim for similar colors, size, and placement across pages; do not paste or repair logos after generation.";
   const visibleTextPolicy = protocol.style?.visible_text_policy || protocol.style?.visibleTextPolicy || "Never render asset ids, filenames, source labels, or protocol metadata as visible slide text.";
   const prompt = [
     "Use case: productivity-visual",
@@ -366,7 +333,7 @@ function visualPageFromProtocolPage(protocolPage, protocol, assetsById, index) {
       "page follows deck-protocol.json",
       "one clear main claim",
       "referenced evidence is respected",
-      "referenced logos keep exact original colors and proportions",
+      "logos, when present, look naturally generated and broadly consistent across pages",
       "no invented numeric results",
       "no tiny unreadable text",
       "no watermarks or UI chrome",
@@ -374,7 +341,7 @@ function visualPageFromProtocolPage(protocolPage, protocol, assetsById, index) {
   };
 }
 
-function protocolPageSlice(page, referenceAssets, templateAssets = []) {
+function protocolPageSlice(page, referenceAssets) {
   return {
     page: page.page,
     title: page.title,
@@ -393,7 +360,6 @@ function protocolPageSlice(page, referenceAssets, templateAssets = []) {
       caption: asset.caption || asset.summary || "",
       usage: asset.usage || "",
     })),
-    template_assets: templateAssets,
   };
 }
 

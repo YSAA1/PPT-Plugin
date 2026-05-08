@@ -44,7 +44,7 @@ Execute in this exact order. Do not skip forward.
 7. After confirmation, create `imagegen-jobs.json`, count confirmed pages, and use `jobs.worker_dispatch.assignments` as the worker plan. For 7+ confirmed pages, automatic bounded subagent dispatch is REQUIRED before direct generation fallback. Read [references/image-generation-workers.md](references/image-generation-workers.md).
 8. Track page status in `imagegen-jobs.json`.
 9. Run deterministic `visual-qa` to check whether the generated PNG files are structurally assembleable. Read [references/manifest-visual-qa.md](references/manifest-visual-qa.md).
-10. Run the internal visual review loop whenever `imagegen-jobs.json.visualReview.enabled=true`; this is automatic for logo/template/page-number/reference/strict_embed/7+ page risk, and optional only for low-risk small brief-only decks.
+10. Run the internal visual review loop whenever `imagegen-jobs.json.visualReview.enabled=true`; this is automatic for template/page-number/reference/strict_embed/7+ page risk, and optional only for low-risk small brief-only decks.
 11. Create `png-manifest.json` only from complete accepted/generated jobs. If visual review is enabled, every page MUST be `accepted`.
 12. Assemble with `assemble-image-ppt` / MCP `assemble_image_ppt`.
 13. Run final `qa_pptx`.
@@ -70,7 +70,7 @@ Collect these before drafting a protocol. Ask only for missing items. Do not inf
 - Required: target audience.
 - Required: page-count range or exact page count.
 - Required: visual style.
-- Required: template invariants: logo policy, logo color policy, footer policy, and any fixed recurring marks OR explicit "none"; page numbers default to none unless the initial request explicitly asks for them.
+- Required: template invariants: footer policy and any fixed recurring marks OR explicit "none"; page numbers default to none unless the initial request explicitly asks for them; logo consistency is a soft preference, not a repair/compositing task.
 - Required: aspect ratio; use 16:9 only when the user says they do not care.
 - Required: output directory and final PPTX filename.
 - Required: reference file paths/uploaded files OR an explicit "no references, generate from brief only" confirmation.
@@ -89,15 +89,15 @@ If no uploaded file or explicit reference path exists, MUST NOT scan the current
 - Codex built-in image generation is the primary image path; missing `OPENAI_API_KEY` is not evidence that built-in `image_gen` is unavailable.
 - `generate-assets --provider codex` is only a prompt-sheet handoff, not image generation.
 - Logo, page-number, and template rules are constraints for Codex built-in image generation; they do not authorize SVG, HTML, canvas, Python/PPT rendering, screenshots, or local compositing as a substitute.
-- `style_lock.template_contract` in `imagegen-jobs.json` is the canonical hard contract for logo, page-number, footer, and repeated template elements across workers.
+- `style_lock.template_contract` in `imagegen-jobs.json` is the canonical contract for page-number, footer, and repeated template elements across workers; logo size/color consistency is soft guidance only.
 - `deck-protocol.review.md` is the human review version; chat summary alone is not enough for protocol confirmation.
 - `imagegen-jobs.json.worker_dispatch` is the canonical subagent dispatch plan for 7+ page decks.
 - Generated protocols add `speaker_notes` by default. Notes are presenter talk tracks customized to the audience, not one-sentence labels and not visible slide text.
-- Template invariants are hard requirements, not style suggestions. Default to no page numbers; if explicitly requested, keep page-number style/position/format/size/color identical on every non-exempt slide. Do not let only some pages show page numbers, omit required logos, redraw logos differently, recolor/tint logos, or change footer/template marks page by page.
+- Template invariants are hard requirements for page numbers and footer/template marks, not for logo repair. Default to no page numbers; if explicitly requested, keep page-number style/position/format/size/color identical on every non-exempt slide. For logos, only ask the image model to keep color/size/placement broadly consistent; do not paste, overlay, repair, or post-process logos.
 - Never render asset ids, filenames, paths, `source:` labels, or parser/protocol metadata inside slide images.
 - 7+ confirmed pages do not require separate subagent wording from the user; protocol confirmation is enough authorization for bounded image workers.
 - Default subagent strategy is a lightweight context packet. Default subagent reasoning is `low`; escalate to `medium` only for complex evidence/fidelity pages. Forked context is optional and must not be combined with reasoning effort.
-- Visual review is automatic for logo/template/page-number/reference/strict_embed/7+ page risk. Deterministic `visual-qa` still runs before assembly for every deck.
+- Visual review is automatic for template/page-number/reference/strict_embed/7+ page risk. Logo consistency alone should not force strict visual review. Deterministic `visual-qa` still runs before assembly for every deck.
 
 ## Internal Tools
 

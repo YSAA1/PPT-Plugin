@@ -26,7 +26,7 @@ Use only these fidelity modes:
 
 - `free`: approved brief/style only.
 - `light_redraw`: preserve facts, trends, key numbers, labels, and meaning while restyling.
-- `strict_embed`: preserve referenced figures, tables, headers, values, logos, and captions.
+- `strict_embed`: preserve referenced figures, tables, headers, values, and captions.
 
 Existing-PPT hard-preservation requests are a different product lane:
 
@@ -86,10 +86,10 @@ Speaker notes rules:
 
 Visual consistency and metadata rules:
 
-- The protocol/style MUST define template invariants for the whole deck: logo policy, logo color policy, page-number policy, footer policy, recurring template marks, and any cover/section exemptions.
-- At minimum, the template invariant contract includes logo policy, page-number policy, footer policy, and logo color policy.
-- Logo treatment is a hard invariant. If `style.logo_ids` is non-empty, every non-exempt page must use the same referenced logo asset(s), placement, size, and original colors. If no logo is requested/provided, do not invent logos on individual pages.
-- Logo recoloring is forbidden. Do not tint, gradient-shift, restyle, redraw, or adapt logo colors to a slide palette; preserve the original referenced logo colors exactly.
+- The protocol/style MUST define template invariants for the whole deck: page-number policy, footer policy, recurring template marks, and any cover/section exemptions. Logo consistency may be included as soft guidance only.
+- At minimum, the template invariant contract includes page-number policy and footer policy. Logo policy, when present, should say "aim for similar color, size, and placement" rather than exact preservation.
+- Logo treatment is a soft visual consistency preference. If `style.logo_ids` is non-empty, use it only as image-generation guidance; do not add pasted/overlaid/repaired logo elements after generation.
+- Do not force logo recoloring or exact logo reconstruction. Ask the image model to keep logo color, size, and placement broadly consistent when a logo appears naturally.
 - Page-number and footer treatment are hard invariants. Do not allow page numbers or footers to appear randomly on only some pages.
 - Default page-number policy is no visible page numbers. Add page numbers only when the initial user requirement explicitly requests visible page numbers.
 - If page numbers are explicitly requested, choose one deck-wide page-number style and enforce identical position, format, size, and color on every non-exempt page.

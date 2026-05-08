@@ -60,13 +60,13 @@ Subagent runtime and model rules:
 
 Shared context rules:
 
-- Before spawning workers, the leader MUST create one shared deck generation context from the confirmed protocol: deck title, audience, aspect ratio, global style, palette, typography, logo/template asset ids, page list, global negative rules, QA acceptance rules, and asset index.
+- Before spawning workers, the leader MUST create one shared deck generation context from the confirmed protocol: deck title, audience, aspect ratio, global style, palette, typography, optional logo consistency preference, template asset ids, page list, global negative rules, QA acceptance rules, and asset index.
 - `imagegen-jobs.json` MUST contain a `style_lock` object. Treat that object as the canonical shared visual contract for all image-generation and visual-review workers.
 - `imagegen-jobs.json` MUST contain `worker_dispatch`. For 7+ pages, `worker_dispatch.required` MUST be true and `worker_dispatch.assignments` MUST be non-empty before any direct generation fallback.
 - `style_lock` MUST include stable visual fields for layout density, font/size tendency, palette, chart style, margins/whitespace, and forbidden items.
-- `style_lock.template_contract` MUST include logo policy, logo color policy, page-number policy, footer policy, recurring template-element policy, and any explicit exemptions. Workers must treat these as hard invariants on every assigned page.
+- `style_lock.template_contract` MUST include page-number policy, footer policy, recurring template-element policy, and any explicit exemptions. Logo policy/color policy may be present as soft guidance only; workers must not turn logo consistency into post-processing or compositing.
 - The page-number/footer policy is part of the template invariant contract, not an optional per-page decoration. Default is no visible page numbers unless the confirmed initial request explicitly asked for them.
-- `style_lock` MUST include one visible-text policy. Workers must follow the same footer/logo/page-number policy on every assigned page.
+- `style_lock` MUST include one visible-text policy. Workers must follow the same footer/page-number policy on every assigned page; logo consistency is best-effort prompt guidance.
 - Every worker MUST receive the exact same `style_lock` plus only its assigned page protocol slice and relevant reference asset paths.
 - MUST NOT rely on inherited chat history as the only consistency mechanism.
 - Forked chat history is supplemental only. If fork history fails, is unavailable, or differs between workers, consistency MUST still come from the explicit `style_lock`.
@@ -150,7 +150,7 @@ Scope:
 - Use low reasoning by default, or medium only when the assignment explicitly states the page meets the escalation rule; focus on direct image generation, not deck planning.
 - Do not render internal metadata such as asset ids, filenames, file paths, `source:`, `source table`, `reference asset`, or protocol field names.
 - Do not add visible page numbers unless `style_lock.template_contract.page_number_policy` explicitly requires them; if required, keep style, position, format, size, and color identical across all non-exempt pages.
-- Keep logos and recurring template marks identical to `style_lock.template_contract`; do not invent, omit, restyle, recolor, tint, gradient-shift, resize, redraw, or move logos page by page.
+- Keep recurring template marks aligned with `style_lock.template_contract`. For logos, aim for similar color, approximate size, and placement when they appear naturally; do not paste, overlay, repair, or post-process logos.
 
 Shared deck generation context:
 - Style lock:
@@ -205,7 +205,7 @@ Failure conditions:
 - Returning a background-only image is failure.
 - Suggesting later PPT text overlay is failure.
 - Treating missing `OPENAI_API_KEY` as proof that Codex built-in image generation is unavailable is failure.
-- In `strict_embed`, changing numbers, curves, table headers, logos, or figure captions is failure.
+- In `strict_embed`, changing numbers, curves, table headers, or figure captions is failure.
 ```
 
 Leader MUST NOT treat a subagent response as successful unless it includes a real generated PNG path for each assigned page.
