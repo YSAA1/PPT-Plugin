@@ -50,9 +50,10 @@ Visual review state is stored in `imagegen-jobs.json`, not in the protocol. The 
 
 Visual QA activation:
 
-- Default: do not enable manual visual review. Deterministic `visual-qa` still checks PNG existence, format, dimensions, placeholder markers, and `strict_embed` reference binding.
-- Enable visual review only when the user asks for visual QA, strict review, consistency checking, or protocol-execution checking.
-- Once visual review is enabled, set `visualReview.enabled=true`; generated pages MUST NOT go directly to manifest.
+- Default: deterministic `visual-qa` always checks PNG existence, format, dimensions, placeholder markers, and `strict_embed` reference binding.
+- `imagegen-jobs-create` automatically sets `visualReview.enabled=true` when the deck has template assets, visible page-number requirements, `strict_embed`, reference-grounded inputs, visual/document reference assets, or 7+ pages. Logo consistency alone should not force strict visual review.
+- Low-risk small brief-only decks may keep `visualReview.enabled=false`; users can still explicitly ask for strict visual QA.
+- Once visual review is enabled, generated pages MUST NOT go directly to manifest.
 - When visual review is enabled, `png-manifest.json` MUST wait until every page status is `accepted`.
 - Without visual review, `png-manifest.json` may use `generated` or `accepted` jobs after deterministic QA passes.
 - Manual override may only bypass overrideable review findings. It MUST NOT bypass missing PNG, non-PNG, placeholder PNG, tiny PNG, missing `strict_embed` references, or `strict_embed` `reference_fidelity=fail`.
@@ -71,8 +72,9 @@ Allowed page states include:
 Visual review dimensions:
 
 - `consistency`: matches the confirmed deck style, typography, palette, and visual rhythm.
+- `template_invariants`: follows the deck-wide page-number, footer, and recurring template-element contract; logo color/size/placement consistency is soft guidance and should not trigger pasted or repaired logo overlays.
 - `protocol_alignment`: follows the page claim, content inputs, reference bindings, final image prompt, negative prompt, and fidelity mode.
-- `reference_fidelity`: preserves assigned source figures, tables, values, curves, headers, logos, and captions, especially for `strict_embed`.
+- `reference_fidelity`: preserves assigned source figures, tables, values, curves, headers, and captions, especially for `strict_embed`.
 - `text_legibility`: keeps all rendered slide text readable at presentation scale.
 - `artifact_quality`: avoids obvious generated-image defects such as broken layout, warped tables/logos, blank regions, watermarks, or background-only output.
 
@@ -103,6 +105,7 @@ Shared deck context:
 - Global style: <style.description>
 - Palette: <style.palette>
 - Typography: <style.typography>
+- Template invariant contract: <style_lock.template_contract>
 - Full page list: <page numbers, titles, claims>
 
 For each assigned page:
@@ -115,10 +118,11 @@ For each assigned page:
 
 Review dimensions:
 1. consistency: Does this PNG match the confirmed deck visual system, typography, palette, density, and cross-page rhythm?
-2. protocol_alignment: Does this PNG follow the page claim, required content, reference bindings, final_image_prompt, negative_prompt, and fidelity?
-3. reference_fidelity: Are referenced figures, tables, numbers, curves, headers, logos, and captions preserved?
-4. text_legibility: Is all visible slide text readable at presentation scale?
-5. artifact_quality: Are there obvious generated-image defects, broken layout, warped tables/logos, blank regions, watermarks, or background-only output?
+2. template_invariants: Does this PNG follow the page-number, footer, and recurring template-element contract from `style_lock.template_contract`? If logos appear, do they look broadly consistent without pasted/overlay repair artifacts?
+3. protocol_alignment: Does this PNG follow the page claim, required content, reference bindings, final_image_prompt, negative_prompt, and fidelity?
+4. reference_fidelity: Are referenced figures, tables, numbers, curves, headers, and captions preserved?
+5. text_legibility: Is all visible slide text readable at presentation scale?
+6. artifact_quality: Are there obvious generated-image defects, broken layout, warped tables/logos, blank regions, watermarks, or background-only output?
 
 Return one compact JSON object:
 {
@@ -127,6 +131,7 @@ Return one compact JSON object:
       "page": 1,
       "verdict": "pass|warn|fail",
       "consistency": "pass|warn|fail",
+      "template_invariants": "pass|warn|fail",
       "protocol_alignment": "pass|warn|fail",
       "reference_fidelity": "pass|warn|fail",
       "text_legibility": "pass|warn|fail",
@@ -142,5 +147,5 @@ Verdict rules:
 - `warn`: usable but has minor consistency/protocol/image-quality issues worth recording.
 - `fail`: must be regenerated because it drifts from protocol, breaks deck consistency, or has material image defects.
 - `fail` requires one specific reason and one revision suggestion.
-- In `strict_embed`, changed numbers, curves, table headers, logos, or captions are `reference_fidelity=fail` and block assembly.
+- In `strict_embed`, changed numbers, curves, table headers, or captions are `reference_fidelity=fail` and block assembly.
 ```

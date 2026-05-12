@@ -1,13 +1,14 @@
 import path from "node:path";
 import { inspectPng } from "./png-utils.mjs";
 import { readJson, writeJson } from "./lib.mjs";
-import { speakerNotesFromPage } from "./deck-protocol.mjs";
+import { buildTemplateContract, speakerNotesFromPage } from "./deck-protocol.mjs";
 
 const DONE_STATES = new Set(["generated", "accepted"]);
 const BACKFILL_STATES = new Set(["generated", "accepted", "needs_review"]);
 const REVIEW_VERDICTS = new Set(["pass", "warn", "fail"]);
 const REVIEW_DIMENSIONS = [
   "consistency",
+  "template_invariants",
   "protocol_alignment",
   "reference_fidelity",
   "text_legibility",
@@ -19,6 +20,7 @@ export function createImagegenJobs(protocol, { protocolPath = null, outPath = nu
   const pages = protocol.pages || [];
   const styleLock = buildStyleLock(protocol);
   const workerDispatch = buildWorkerDispatch(pages);
+  const visualReviewPlan = buildVisualReviewPlan(protocol, { pages, styleLock, workerDispatch });
   return {
     kind: "ppt-composer-imagegen-jobs",
     version: "0.1",
@@ -27,7 +29,9 @@ export function createImagegenJobs(protocol, { protocolPath = null, outPath = nu
     style_lock: styleLock,
     worker_dispatch: workerDispatch,
     visualReview: {
-      enabled: false,
+      enabled: visualReviewPlan.enabled,
+      autoEnabled: visualReviewPlan.enabled,
+      reasons: visualReviewPlan.reasons,
       dimensions: REVIEW_DIMENSIONS,
       maxAutoRevisions: 2,
     },
@@ -65,6 +69,28 @@ export function createImagegenJobs(protocol, { protocolPath = null, outPath = nu
       },
     })),
     outPath,
+  };
+}
+
+function buildVisualReviewPlan(protocol = {}, { pages = [], styleLock = {}, workerDispatch = {} } = {}) {
+  const reasons = [];
+  const style = protocol.style || {};
+  const assets = protocol.assets || [];
+  const templateContract = styleLock.template_contract || {};
+  const pageNumberPolicy = String(templateContract.page_number_policy || style.page_number_policy || style.pageNumberPolicy || "").toLowerCase();
+  if (workerDispatch.required || pages.length >= 7) reasons.push("7+ pages need cross-page consistency review");
+  if ((style.template_image_ids || []).length) reasons.push("template image requires visual consistency review");
+  if (pageNumberPolicy && !/no visible page numbers|no page numbers|omit page numbers|without page numbers/.test(pageNumberPolicy)) {
+    reasons.push("visible page numbers require style/position/format consistency review");
+  }
+  if (pages.some((page) => page.fidelity === "strict_embed")) reasons.push("strict_embed pages require reference fidelity review");
+  if (protocol.mode === "reference_grounded_mode") reasons.push("reference-grounded deck requires protocol/reference alignment review");
+  if (assets.some((asset) => /template|source_image|source_table|pptx|pdf|image/.test(`${asset.type || ""} ${asset.source || ""}`.toLowerCase()))) {
+    reasons.push("visual or document reference assets require fidelity review");
+  }
+  return {
+    enabled: reasons.length > 0,
+    reasons: [...new Set(reasons)],
   };
 }
 
@@ -242,6 +268,7 @@ export function reviewImagegenJob(jobs, {
   reviewer = "",
   revisionSuggestion = "",
   consistency = null,
+  templateInvariants = null,
   protocolAlignment = null,
   basicImageQuality = null,
   referenceFidelity = null,
@@ -258,6 +285,7 @@ export function reviewImagegenJob(jobs, {
   const categories = normalizeReviewCategories({
     verdict,
     consistency,
+    templateInvariants,
     protocolAlignment,
     referenceFidelity,
     textLegibility,
@@ -445,6 +473,7 @@ function supersedeCurrentAttemptIfNeeded(page, nextPath, note) {
 function normalizeReviewCategories({
   verdict,
   consistency,
+  templateInvariants,
   protocolAlignment,
   referenceFidelity,
   textLegibility,
@@ -452,6 +481,7 @@ function normalizeReviewCategories({
 }) {
   return {
     consistency: normalizeVerdict(consistency || verdict, "consistency"),
+    template_invariants: normalizeVerdict(templateInvariants || verdict, "template_invariants"),
     protocol_alignment: normalizeVerdict(protocolAlignment || verdict, "protocol_alignment"),
     reference_fidelity: normalizeVerdict(referenceFidelity || verdict, "reference_fidelity"),
     text_legibility: normalizeVerdict(textLegibility || verdict, "text_legibility"),
@@ -500,6 +530,7 @@ function normalizeUncertainties(value) {
 function buildStyleLock(protocol = {}) {
   const deck = protocol.deck || {};
   const style = protocol.style || {};
+  const templateContract = buildTemplateContract(style);
   const pages = (protocol.pages || []).map((page) => ({
     page: Number(page.page),
     title: page.title,
@@ -525,12 +556,18 @@ function buildStyleLock(protocol = {}) {
       font_scale: style.font_scale || style.font_size_tendency || "readable slide-scale titles and labels",
       chart_style: style.chart_style || "clean consulting/research charts with legible labels",
       margins: style.margins || style.whitespace || "consistent margins and controlled whitespace",
-      page_number_policy: style.page_number_policy || style.pageNumberPolicy || "consistent: either no page numbers, or the same small bottom-right page/total footer on every slide except a deliberate cover exemption",
+      page_number_policy: templateContract.page_number_policy,
+      footer_policy: templateContract.footer_policy,
+      logo_policy: templateContract.logo_policy,
+      logo_color_policy: templateContract.logo_color_policy,
+      template_element_policy: templateContract.template_element_policy,
       visible_text_policy: style.visible_text_policy || style.visibleTextPolicy || "visible slide text must not include asset ids, filenames, file paths, source labels, or protocol metadata",
       template_image_ids: style.template_image_ids || [],
-      logo_ids: style.logo_ids || [],
+      logo_ids: templateContract.logo_ids,
+      template_exemptions: templateContract.template_exemptions,
       forbidden: style.forbidden || [],
     },
+    template_contract: templateContract,
     page_list: pages,
     assets: (protocol.assets || []).map((asset) => ({
       id: asset.id,
@@ -541,11 +578,13 @@ function buildStyleLock(protocol = {}) {
     })),
     format_contract: [
       "Every slide is one complete 16:9 full-slide PNG unless the protocol says otherwise.",
-      "All visible title, claim, labels, chart text, captions, and logos must be rendered inside the PNG.",
+      "All visible title, claim, labels, chart text, captions, and any requested logos must be rendered inside the PNG.",
       "Do not create a blank background, prompt-only handoff, SVG, HTML screenshot, or later PowerPoint text overlay.",
       "Use the same visual system, typography, palette, density, margins, and hierarchy across all pages.",
-      "Use one consistent page number/footer policy across the deck; do not randomly add page numbers to only some pages.",
-      "Do not invent or alter facts, numbers, curves, table headers, logos, or captions on strict_embed pages.",
+      "Template invariants are shared guidance: keep the same page-number policy, footer policy, and recurring template rhythm across non-exempt slides; logo consistency is a soft visual goal, not a post-processing task.",
+      "Do not add visible page numbers unless style_lock.template_contract.page_number_policy explicitly requires them; if page numbers are required, keep style, position, format, size, and color identical on every non-exempt slide.",
+      "If logos are present, aim for similar color, approximate size, and placement across pages; do not paste, repair, overlay, or post-process logos after image generation.",
+      "Do not invent or alter facts, numbers, curves, table headers, or captions on strict_embed pages.",
     ],
     negative_contract: [
       "No watermark.",

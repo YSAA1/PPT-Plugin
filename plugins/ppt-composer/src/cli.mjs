@@ -42,7 +42,7 @@ Usage:
   ppt-composer imagegen-jobs-create --protocol <deck-protocol.json> --out <imagegen-jobs.json>
   ppt-composer imagegen-jobs-status --jobs <imagegen-jobs.json>
   ppt-composer imagegen-jobs-backfill --jobs <imagegen-jobs.json> --page <n> --png <slide.png> [--status generated|needs_review|accepted] [--note <note>] [--execution-summary <json>]
-  ppt-composer imagegen-jobs-review --jobs <imagegen-jobs.json> --page <n> [--verdict pass|warn|fail] [--consistency pass|warn|fail] [--protocol-alignment pass|warn|fail] [--reference-fidelity pass|warn|fail] [--text-legibility pass|warn|fail] [--artifact-quality pass|warn|fail] [--note <note>] [--revision-suggestion <note>]
+  ppt-composer imagegen-jobs-review --jobs <imagegen-jobs.json> --page <n> [--verdict pass|warn|fail] [--consistency pass|warn|fail] [--template-invariants pass|warn|fail] [--protocol-alignment pass|warn|fail] [--reference-fidelity pass|warn|fail] [--text-legibility pass|warn|fail] [--artifact-quality pass|warn|fail] [--note <note>] [--revision-suggestion <note>]
   ppt-composer imagegen-jobs-revise --jobs <imagegen-jobs.json> --page <n> [--note <note>] [--revision-suggestion <note>]
   ppt-composer imagegen-jobs-to-manifest --jobs <imagegen-jobs.json> --out <png-manifest.json> [--require-accepted]
   ppt-composer visual-qa --protocol <deck-protocol.json> --jobs <imagegen-jobs.json> --out <visual-qa.json> [--manual-override-note <note>]
@@ -346,6 +346,7 @@ async function main() {
       reviewer: args.reviewer || "",
       revisionSuggestion: args["revision-suggestion"] || "",
       consistency: args.consistency || null,
+      templateInvariants: args["template-invariants"] || null,
       protocolAlignment: args["protocol-alignment"] || null,
       basicImageQuality: args["basic-image-quality"] || null,
       referenceFidelity: args["reference-fidelity"] || null,

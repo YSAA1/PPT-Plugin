@@ -14,6 +14,7 @@
 
 Primary path: Codex built-in image generation via the installed `imagegen` skill, `$imagegen`, or `image_gen`.
 
+- Treat logo, page-number, and template rules as prompt constraints for Codex built-in image generation. They are not permission to switch to SVG, HTML, canvas, Python/PPT rendering, screenshots, or local compositing.
 - MUST NOT check `OPENAI_API_KEY` before trying Codex built-in image generation.
 - Missing `OPENAI_API_KEY` MUST NOT be treated as evidence that built-in `image_gen` is unavailable.
 - A missing `OPENAI_API_KEY` does not mean built-in `image_gen` is unavailable.
@@ -59,11 +60,13 @@ Subagent runtime and model rules:
 
 Shared context rules:
 
-- Before spawning workers, the leader MUST create one shared deck generation context from the confirmed protocol: deck title, audience, aspect ratio, global style, palette, typography, logo/template asset ids, page list, global negative rules, QA acceptance rules, and asset index.
+- Before spawning workers, the leader MUST create one shared deck generation context from the confirmed protocol: deck title, audience, aspect ratio, global style, palette, typography, optional logo consistency preference, template asset ids, page list, global negative rules, QA acceptance rules, and asset index.
 - `imagegen-jobs.json` MUST contain a `style_lock` object. Treat that object as the canonical shared visual contract for all image-generation and visual-review workers.
 - `imagegen-jobs.json` MUST contain `worker_dispatch`. For 7+ pages, `worker_dispatch.required` MUST be true and `worker_dispatch.assignments` MUST be non-empty before any direct generation fallback.
 - `style_lock` MUST include stable visual fields for layout density, font/size tendency, palette, chart style, margins/whitespace, and forbidden items.
-- `style_lock` MUST include one page-number/footer policy and one visible-text policy. Workers must follow the same footer policy on every assigned page.
+- `style_lock.template_contract` MUST include page-number policy, footer policy, recurring template-element policy, and any explicit exemptions. Logo policy/color policy may be present as soft guidance only; workers must not turn logo consistency into post-processing or compositing.
+- The page-number/footer policy is part of the template invariant contract, not an optional per-page decoration. Default is no visible page numbers unless the confirmed initial request explicitly asked for them.
+- `style_lock` MUST include one visible-text policy. Workers must follow the same footer/page-number policy on every assigned page; logo consistency is best-effort prompt guidance.
 - Every worker MUST receive the exact same `style_lock` plus only its assigned page protocol slice and relevant reference asset paths.
 - MUST NOT rely on inherited chat history as the only consistency mechanism.
 - Forked chat history is supplemental only. If fork history fails, is unavailable, or differs between workers, consistency MUST still come from the explicit `style_lock`.
@@ -141,11 +144,13 @@ Scope:
 - Do not change the outline.
 - Do not edit prompts for other pages.
 - Do not create PPTX, SVG, HTML, markdown, placeholder art, or prompt-only artifacts.
+- Do not satisfy template/logo/page-number constraints by switching away from Codex built-in image generation.
 - Follow the shared deck generation context exactly so pages are visually consistent with other workers.
 - Treat `speaker_notes` as presenter-only notes; do not render them as visible slide text.
 - Use low reasoning by default, or medium only when the assignment explicitly states the page meets the escalation rule; focus on direct image generation, not deck planning.
 - Do not render internal metadata such as asset ids, filenames, file paths, `source:`, `source table`, `reference asset`, or protocol field names.
-- Keep page numbers/footers consistent with the shared `style_lock`; do not add or omit page numbers ad hoc.
+- Do not add visible page numbers unless `style_lock.template_contract.page_number_policy` explicitly requires them; if required, keep style, position, format, size, and color identical across all non-exempt pages.
+- Keep recurring template marks aligned with `style_lock.template_contract`. For logos, aim for similar color, approximate size, and placement when they appear naturally; do not paste, overlay, repair, or post-process logos.
 
 Shared deck generation context:
 - Style lock:
@@ -157,6 +162,7 @@ Shared deck generation context:
 - Palette: <colors>
 - Typography: <fonts and text style>
 - Page number/footer policy: <style_lock.style.page_number_policy>
+- Template invariant contract: <style_lock.template_contract>
 - Visible text policy: <style_lock.style.visible_text_policy>
 - Logos/template assets: <ids and paths>
 - Full page list: <page numbers and titles/claims>
@@ -181,11 +187,12 @@ For each assigned page:
 
 Required behavior:
 1. Inspect/use assigned reference images and table PNGs when present.
-2. Directly call Codex built-in image generation via the installed `imagegen` skill, `$imagegen`, or `image_gen` for each assigned page.
+2. Directly call Codex built-in image generation via the installed `imagegen` skill, `$imagegen`, or `image_gen` for each assigned page; do not use local rendering/compositing as a substitute.
 3. Save or return the real generated PNG artifact for each page.
 4. Stay within the assigned page budget; if generation is still running, keep working until the wait budget is reached.
 5. Return only:
    - page number
+   - logo and recurring template elements
    - generated PNG path
    - status: generated or failed
    - one-line failure reason if failed.
@@ -198,7 +205,7 @@ Failure conditions:
 - Returning a background-only image is failure.
 - Suggesting later PPT text overlay is failure.
 - Treating missing `OPENAI_API_KEY` as proof that Codex built-in image generation is unavailable is failure.
-- In `strict_embed`, changing numbers, curves, table headers, logos, or figure captions is failure.
+- In `strict_embed`, changing numbers, curves, table headers, or figure captions is failure.
 ```
 
 Leader MUST NOT treat a subagent response as successful unless it includes a real generated PNG path for each assigned page.

@@ -5,6 +5,7 @@ import { readJson, writeJson } from "./lib.mjs";
 const PNG_READY_STATES = new Set(["generated", "accepted", "needs_review"]);
 const VISUAL_REVIEW_DIMENSIONS = [
   "consistency",
+  "template_invariants",
   "protocol_alignment",
   "reference_fidelity",
   "text_legibility",
@@ -18,6 +19,7 @@ const HARD_BLOCKER_CODES = new Set([
   "non_png",
   "tiny_png",
   "placeholder_png",
+  "template_contract_missing",
   "strict_embed_missing_reference",
   "strict_embed_reference_fidelity_failed",
 ]);
@@ -30,6 +32,7 @@ export async function runVisualQa({ protocol, jobs, baseDir = process.cwd(), man
   const visualFindings = [];
   const visualReviewPages = [];
   const visualReviewEnabled = Boolean(jobs.visualReview?.enabled);
+  deterministicFindings.push(...templateContractFindings(jobs));
   const jobByPage = new Map((jobs.pages || []).map((job) => [Number(job.page), job]));
   for (const page of protocol.pages || []) {
     const job = jobByPage.get(Number(page.page));
@@ -123,6 +126,17 @@ export async function runVisualQa({ protocol, jobs, baseDir = process.cwd(), man
   };
 }
 
+function templateContractFindings(jobs = {}) {
+  const contract = jobs.style_lock?.template_contract;
+  if (!contract || typeof contract !== "object") {
+    return [fail(null, "template_contract_missing", "imagegen-jobs.json style_lock.template_contract is required for page-number, footer, and recurring template consistency")];
+  }
+  const required = ["page_number_policy", "footer_policy", "template_element_policy"];
+  return required
+    .filter((key) => !String(contract[key] || "").trim())
+    .map((key) => fail(null, "template_contract_missing", `style_lock.template_contract.${key} is required`));
+}
+
 export async function runVisualQaFile({ protocolPath, jobsPath, outPath, manualOverrideNote = "" } = {}) {
   const protocol = await readJson(protocolPath);
   const jobs = await readJson(jobsPath);
@@ -195,6 +209,7 @@ function visualReviewSummary(protocolPage, job) {
     revisionSuggestion: job?.revision?.revision_suggestion || job?.review?.revision_suggestion || "",
     protocolChecks: {
       consistency: "reviewer-verdict",
+      template_invariants: "reviewer-verdict",
       protocol_alignment: "reviewer-verdict",
       reference_fidelity: "reviewer-verdict",
       text_legibility: "reviewer-verdict",
